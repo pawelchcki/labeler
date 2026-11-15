@@ -6,15 +6,19 @@ use fontdue::{Font, FontSettings};
 use std::f64::consts::PI;
 
 const FONT: &[u8] = include_bytes!("../assets/NotoSans-Regular.ttf");
+const FONT_BOLD: &[u8] = include_bytes!("../assets/NotoSans-Bold.ttf");
+const FONT_MONO: &[u8] = include_bytes!("../assets/NotoSansMono-Regular.ttf");
+const FONT_SERIF: &[u8] = include_bytes!("../assets/NotoSerif-Regular.ttf");
 #[derive(Deserialize)]
 #[serde(default)]
 pub struct Request {
     pub op: String, pub text: String, pub mode: String, pub cable: String,
     pub diameter_mm: f64, pub length_mm: f64, pub trim_mm: f64,
     pub copies: usize, pub raster: String, pub rows: usize, pub density: u8,
+    pub font: String, pub font_size_px: usize, pub align: String,
 }
 impl Default for Request {
-    fn default() -> Self { Self { op:"plan".into(), text:String::new(), mode:"large".into(), cable:"cat6a".into(), diameter_mm:0., length_mm:30., trim_mm:3., copies:1, raster:String::new(), rows:216, density:2 } }
+    fn default() -> Self { Self { op:"plan".into(), text:String::new(), mode:"large".into(), cable:"cat6a".into(), diameter_mm:0., length_mm:30., trim_mm:3., copies:1, raster:String::new(), rows:216, density:2, font:"sans".into(), font_size_px:0, align:"center".into() } }
 }
 #[derive(Clone, Serialize)]
 pub struct Cable { pub id: &'static str, pub name: &'static str, pub diameter_mm:f64, pub range: &'static str }
@@ -56,10 +60,14 @@ fn split(text:&str,count:usize)->Vec<String> {
     }
     lines.into_iter().filter(|l|!l.is_empty()).collect()
 }
-fn fit(font:&Font,text:&str,w:usize,h:usize)->Result<(usize,usize,Vec<u8>,usize),String> {
+fn aligned_offset(available:usize, used:usize, align:&str)->usize {
+    match align { "left"=>0, "right"=>available-used, _=>(available-used)/2 }
+}
+fn fit(font:&Font,text:&str,w:usize,h:usize,requested_size:usize,align:&str)->Result<(usize,usize,Vec<u8>,usize),String> {
     let mut best=None;
     for count in 1..=4 { let lines=split(text,count);
-        for size in (6..=160).rev() {
+        let sizes=if requested_size==0 {6..=160} else {requested_size..=requested_size};
+        for size in sizes.rev() {
             let bits:Vec<_>=lines.iter().map(|l|line(font,l,size as f32)).collect();
             let width=bits.iter().map(|b|b.0).max().unwrap_or(0);
             let height=bits.iter().map(|b|b.1).sum::<usize>()+4*(bits.len()-1);
@@ -68,13 +76,15 @@ fn fit(font:&Font,text:&str,w:usize,h:usize)->Result<(usize,usize,Vec<u8>,usize)
                 let score=size*100-lines.len()*2;
                 if best.as_ref().is_none_or(|(s,_)| score>*s) {
                     let mut pixels=vec![0;width*height]; let mut y=0;
-                    for (bw,bh,bitmap) in bits { let x=(width-bw)/2; for yy in 0..bh { pixels[(y+yy)*width+x..(y+yy)*width+x+bw].copy_from_slice(&bitmap[yy*bw..(yy+1)*bw]); } y+=bh+4; }
+                    for (bw,bh,bitmap) in bits { let x=aligned_offset(width,bw,align); for yy in 0..bh { pixels[(y+yy)*width+x..(y+yy)*width+x+bw].copy_from_slice(&bitmap[yy*bw..(yy+1)*bw]); } y+=bh+4; }
                     best=Some((score,(width,height,pixels,size)));
                 } break;
             }
         }
     }
-    best.map(|b|b.1).ok_or("Text is too long for a readable label. Shorten it or use longer stock.".into())
+    best.map(|b|b.1).ok_or_else(|| if requested_size==0 {
+        "Text is too long for a readable label. Shorten it or use longer stock.".into()
+    } else { format!("Text does not fit at {} px. Choose Auto fit, a smaller size, or longer stock.",requested_size) })
 }
 fn paste(out:&mut[u8],width:usize,x:usize,y:usize,glyph:&(usize,usize,Vec<u8>,usize)) {
     for yy in 0..glyph.1 { for xx in 0..glyph.0 {out[(y+yy)*width+x+xx]=glyph.2[yy*glyph.0+xx];} }
@@ -84,14 +94,20 @@ pub fn plan(r:&Request)->Result<Value,String> {
     if !["large","wrap"].contains(&r.mode.as_str()) {return Err("Mode must be large or wrap.".into());}
     if !r.length_mm.is_finite() || !(15.0..=60.0).contains(&r.length_mm) || !r.trim_mm.is_finite() || !(0.0..=6.0).contains(&r.trim_mm) {return Err("Use 15–60 mm stock and 0–6 mm feed trim.".into());}
     if !(1..=10).contains(&r.copies) {return Err("Choose 1–10 copies.".into());}
+    if !["left","center","right"].contains(&r.align.as_str()) {return Err("Alignment must be left, center or right.".into());}
+    if r.font_size_px!=0 && !(6..=160).contains(&r.font_size_px) {return Err("Use Auto fit or a font size from 6–160 px.".into());}
+    let font_bytes=match r.font.as_str() {
+        "sans"=>FONT,"sans-bold"=>FONT_BOLD,"mono"=>FONT_MONO,"serif"=>FONT_SERIF,
+        _=>return Err("Choose Sans, Sans bold, Mono or Serif.".into()),
+    };
     let rows=((r.length_mm-r.trim_mm)*8.).floor() as usize;
-    let font=Font::from_bytes(FONT,FontSettings::default()).map_err(|e|e.to_string())?;
+    let font=Font::from_bytes(font_bytes,FontSettings::default()).map_err(|e|e.to_string())?;
     if r.text.chars().any(|c|!c.is_whitespace() && font.lookup_glyph_index(c)==0) {return Err("This font cannot print one of those characters. Use text without emoji or unsupported symbols.".into());}
-    let mut pixels=vec![0;96*rows]; let mut tips=vec![]; let mut repeats=1; let mut diameter=0.; let size;
+    let mut pixels=vec![0;96*rows]; let mut tips=vec![]; let mut repeats=1; let mut diameter=0.; let size; let mut wrap=Value::Null;
     if r.mode=="large" {
-        let g=fit(&font,&r.text,rows-12,84)?; size=g.3;
+        let g=fit(&font,&r.text,rows-12,84,r.font_size_px,&r.align)?; size=g.3;
         // Landscape text rotated 90 degrees into the physical 96-dot feed raster.
-        let mut landscape=vec![0;rows*96]; paste(&mut landscape,rows,(rows-g.0)/2,(96-g.1)/2,&g);
+        let mut landscape=vec![0;rows*96]; paste(&mut landscape,rows,6+aligned_offset(rows-12,g.0,&r.align),(96-g.1)/2,&g);
         for y in 0..96 {for x in 0..rows {pixels[(rows-1-x)*96+y]=landscape[y*rows+x];}}
         tips.push("Peel and apply flat. Keep the calibrated end clearance.".to_string());
     } else {
@@ -99,19 +115,20 @@ pub fn plan(r:&Request)->Result<Value,String> {
         diameter=if r.diameter_mm==0. {preset.diameter_mm}else{r.diameter_mm};
         if !diameter.is_finite() || !(2.0..=20.0).contains(&diameter) {return Err("Cable diameter must be 2–20 mm.".into());}
         let circumference=PI*diameter;
-        if r.length_mm<circumference+2. {tips.push(format!("This cable needs at least {:.1} mm of stock for one turn plus 2 mm overlap. Use a longer label or a flag.",circumference+2.));}
+        wrap=json!({"circumference_mm":circumference,"minimum_length_mm":circumference+2.,"overlap_mm":r.length_mm-circumference,"fits":r.length_mm>=circumference+2.});
+        if r.length_mm<circumference+2. {tips.push(format!("This cable needs at least {:.1} mm of stock for one turn plus 2 mm overlap. Use a longer label or a flag.",((circumference+2.)*10.).ceil()/10.));}
         if r.diameter_mm==0. {tips.push(format!("Diameter is an estimate ({})—measure the jacket for an exact fit.",preset.range));}
         // Two readable faces per turn, with enough spacing to avoid curvature hiding a whole block.
         let pitch=(circumference*8./2.).round().max(48.) as usize;
         repeats=(rows/pitch).clamp(2,4);
         let slot=(rows-12)/repeats; let max_h=slot.saturating_sub(10).min((circumference*8./3.) as usize).max(16);
-        let g=fit(&font,&r.text,84,max_h)?; size=g.3;
-        for i in 0..repeats {let center=6+slot*i+slot/2; paste(&mut pixels,96,(96-g.0)/2,center-g.1/2,&g);}
+        let g=fit(&font,&r.text,84,max_h,r.font_size_px,&r.align)?; size=g.3;
+        for i in 0..repeats {let center=6+slot*i+slot/2; paste(&mut pixels,96,6+aligned_offset(84,g.0,&r.align),center-g.1/2,&g);}
         tips.push("Wrap the long edge around the jacket; the text reads along the cable. Keep the seam away from a complete copy.".into());
     }
     let gray:Vec<u8>=pixels.iter().map(|&p|255-p).collect();
     let raster=pack_pixels(&gray);
-    Ok(json!({"ok":true,"width":96,"rows":rows,"raster":hex::encode(raster),"font_px":size,"repeats":repeats,"diameter_mm":diameter,"tips":tips}))
+    Ok(json!({"ok":true,"width":96,"rows":rows,"raster":hex::encode(raster),"font_px":size,"font":r.font,"align":r.align,"auto_fit":r.font_size_px==0,"repeats":repeats,"diameter_mm":diameter,"wrap":wrap,"tips":tips}))
 }
 fn protocol(r:&Request)->Result<Value,String> {
     let data=hex::decode(&r.raster).map_err(|_|"Invalid raster")?;
@@ -201,4 +218,40 @@ pub extern "system" fn Java_net_chcki_labeler_NativeBridge_call(mut env:jni::JNI
  #[test] fn wrap_geometry_and_overlap_tip(){let p=plan(&Request{text:"kamera wschód 2".into(),mode:"wrap".into(),diameter_mm:10.,..Default::default()}).unwrap();assert!(p["repeats"].as_u64().unwrap()>=2);assert!(p["tips"].to_string().contains("overlap"));}
  #[test] fn invalid_and_emoji_are_rejected(){for text in ["","😀"]{assert!(plan(&Request{text:text.into(),..Default::default()}).is_err());}assert!(plan(&Request{text:"x".into(),diameter_mm:f64::NAN,mode:"wrap".into(),..Default::default()}).is_err());}
  #[test] fn wire_protocol_dimensions_and_stop(){let p=plan(&Request{text:"hello".into(),..Default::default()}).unwrap();let r=Request{raster:p["raster"].as_str().unwrap().into(),..Default::default()};let v=protocol(&r).unwrap();let steps=v["steps"].as_array().unwrap();assert_eq!(steps.last().unwrap()["hex"],"10fffe45");let data=hex::decode(steps[5]["hex"].as_str().unwrap()).unwrap();assert_eq!(&data[..8],&[0x1d,0x76,0x30,0,12,0,216,0]);assert_eq!(data.len(),2600);}
+ #[test] fn fonts_support_polish_and_produce_distinct_rasters(){
+    let mut rasters=std::collections::HashSet::new();
+    for font in ["sans","sans-bold","mono","serif"] {
+        let p=plan(&Request{text:"garaż 1".into(),font:font.into(),font_size_px:24,..Default::default()}).unwrap();
+        assert_eq!(p["font_px"],24); assert_eq!(p["auto_fit"],false);
+        let raster=p["raster"].as_str().unwrap().to_string();
+        assert!(rasters.insert(raster));
+        assert!(plan(&Request{text:"mikuś".into(),font:font.into(),mode:"wrap".into(),font_size_px:12,..Default::default()}).is_ok());
+    }
+ }
+ #[test] fn fixed_size_alignment_moves_ink_without_changing_it(){
+    let mut edges=vec![]; let mut counts=vec![];
+    for align in ["left","center","right"] {
+        let p=plan(&Request{text:"ID 01".into(),font_size_px:24,align:align.into(),..Default::default()}).unwrap();
+        let bytes=hex::decode(p["raster"].as_str().unwrap()).unwrap();
+        let positions:Vec<_>=(0..216*96).filter(|&i|bytes[i/8]&(0x80>>(i%8))!=0).map(|i|215-i/96).collect();
+        edges.push(*positions.iter().min().unwrap());counts.push(positions.len());
+    }
+    assert!(edges[0]<edges[1] && edges[1]<edges[2]);assert_eq!(counts[0],counts[1]);assert_eq!(counts[1],counts[2]);
+ }
+ #[test] fn invalid_font_configuration_and_oversized_text_are_rejected(){
+    for r in [Request{font:"missing".into(),..Default::default()},Request{align:"up".into(),..Default::default()},Request{font_size_px:5,..Default::default()},Request{font_size_px:161,..Default::default()}] {
+        assert!(plan(&Request{text:"x".into(),..r}).is_err());
+    }
+    let error=plan(&Request{text:"Does not fit".into(),font_size_px:160,..Default::default()}).unwrap_err();
+    assert!(error.contains("160 px") && error.contains("Auto fit"));
+ }
+ #[test] fn wrap_metadata_reports_real_overlap_and_minimum_stock(){
+    for (diameter,fits) in [(4.5,true),(7.5,true),(10.,false)] {
+        let p=plan(&Request{text:"USB-C".into(),mode:"wrap".into(),diameter_mm:diameter,..Default::default()}).unwrap();
+        let w=&p["wrap"];assert_eq!(w["fits"],fits);
+        assert!((w["circumference_mm"].as_f64().unwrap()-PI*diameter).abs()<1e-9);
+        assert!((w["minimum_length_mm"].as_f64().unwrap()-PI*diameter-2.).abs()<1e-9);
+        assert!((w["overlap_mm"].as_f64().unwrap()+PI*diameter-30.).abs()<1e-9);
+    }
+ }
 }

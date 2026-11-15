@@ -8,6 +8,10 @@ Labels for the Fichero / AiYin D11s printer, on Android and in your browser. Rus
 
 Open the website, type your text, choose Large label or Cable wrap, and connect the printer using the browser's Bluetooth chooser. Review the exact raster preview, then press Print. Stock length, feed trim, cable presets, measured diameter, ink density and 1–10 copies are supported. Save image downloads the preview as a PNG.
 
+Choose **Sans, Sans bold, Mono or Serif**, use **Auto fit** or an exact **6–160 px** font size, and align text left, center or right. Fixed sizes never silently shrink: a label that will not fit shows an error. Font and layout settings are saved locally. The same font, size and alignment choices are available in the Android app; existing requests retain the original Sans / Auto fit / center defaults.
+
+The **cable-wrap guide** illustrates the flat repeat, wrapping the long edge around the jacket, and reading the words along the cable. Load the USB-C, Cat6a or thick HDMI example to see your actual repeated raster, circumference, overlap and repeat count. Examples populate a preview and never print automatically. A 30 mm label fits a typical 7.5 mm Cat6a cable with about 6.4 mm overlap; a measured 10 mm cable needs at least 33.5 mm of stock for a full turn plus 2 mm overlap. The guide warns when stock is too short.
+
 Direct printing uses [Web Bluetooth](https://developer.chrome.com/docs/capabilities/bluetooth), which requires HTTPS and a supported browser: Chrome on Android, macOS or Windows. Safari and Firefox can preview and save labels but cannot connect a Bluetooth printer. Close other printer apps before connecting. Keep the page visible until the printer confirms completion.
 
 Your label text and raster stay on your device. GitHub Pages serves the static app; no label content is uploaded. After the first successful load, the service worker caches the app and WebAssembly engine for offline use. Settings are saved locally; label text is not saved. An interrupted print remains marked as uncertain in that tab until you confirm you have checked the physical label. The page never resumes or automatically retries an interrupted job.
@@ -64,7 +68,7 @@ cargo test --manifest-path core/Cargo.toml
 adb install --no-streaming -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Only arm64 is packaged initially. Noto Sans is bundled under the SIL Open Font License (core/assets/OFL.txt). This supports Polish accents; unsupported glyphs (including emoji) return a useful error instead of printing squares.
+Only arm64 is packaged initially. The bundled Noto fonts are covered by the SIL Open Font License; [font sources, checksums and licenses](core/assets/FONTS.md) are included. All four faces support Polish accents; unsupported glyphs (including emoji) return a useful error instead of printing squares.
 
 ## On-device checks
 

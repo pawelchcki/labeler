@@ -1,5 +1,13 @@
 # Validation — 2026-11-12
 
+Fonts and cable-wrap guide — 2026-11-15:
+
+- Added bundled Noto Sans Bold, Noto Sans Mono and Noto Serif alongside the original Noto Sans. Font provenance, revision, checksums and OFL license are in `core/assets/FONTS.md`. Both native and WASM rendering use the same font bytes.
+- Added optional `font`, `font_size_px` (zero for Auto fit; otherwise 6–160) and `align` fields to the shared engine. Defaults retain the original Sans / Auto fit / center layout. A fixed size that does not fit returns an error rather than silently shrinking. Web and Android controls expose these settings; Android assistant requests inherit the saved appearance settings.
+- The web guide includes schematic placement diagrams, one-click USB-C / Cat6a / thick-HDMI previews, the real repeated raster, and live geometry from Rust (circumference, overlap, repeats and minimum stock length). Examples never print automatically.
+- Twelve Rust tests and twelve Node tests passed, covering distinct font rasters, Polish glyphs, exact fixed size, overflow rejection, alignment, geometry and expanded native/WASM parity. `assembleDebug --offline` passed for Android.
+- Browser tests passed at desktop and 390 px mobile widths with no JavaScript errors: all font choices, fixed sizing and overflow, saved alignment/settings, all three wrap examples, insufficient-stock guidance, PNG downloads, offline rendering, simulated printing and the interrupted-job guard. The Android update was built but has not been installed or physically retested in this change.
+
 Web app — 2026-11-15:
 
 - Compiled the existing Rust engine to WebAssembly with a small JSON ABI; no separate browser layout or protocol implementation. Native/WASM comparison passed for eight large/wrap plans, Polish text, measured geometry, minimum/maximum stock lengths, printer sequences and reply parsing. Invalid input and repeated ABI calls were also tested.

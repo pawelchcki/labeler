@@ -39,5 +39,6 @@ abstract class BasePrinterFunctions : AppFunctionService() {
         val prefs = getSharedPreferences("printer", MODE_PRIVATE)
         return JSONObject().put("text",text).put("mode",mode).put("cable",cable).put("diameter_mm",diameter).put("copies",copies)
             .put("length_mm",prefs.getFloat("length",30f).toDouble()).put("trim_mm",prefs.getFloat("trim",3f).toDouble())
+            .put("font",prefs.getString("font","sans")).put("font_size_px",prefs.getInt("font_size_px",0)).put("align",prefs.getString("align","center"))
     }
 }

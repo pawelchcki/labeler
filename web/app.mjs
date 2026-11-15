@@ -60,7 +60,7 @@ function controls() {
   $('download').disabled = !preview || rendering;
   $('uncertain-panel').hidden = !guard.pending;
   $('confirm-checked').disabled = printing;
-  for (const element of document.querySelectorAll('.editor input, .editor textarea, .editor select, .examples button, .print-options input, .print-options select')) element.disabled = printing;
+  for (const element of document.querySelectorAll('.editor input, .editor textarea, .editor select, .examples button, .print-options input, .print-options select, [data-wrap-example], #start-wrap')) element.disabled = printing;
   if (!printing) $('print-label').textContent = Number($('copies').value) > 1 ? `Print ${$('copies').value} labels` : 'Print one label';
 }
 
@@ -70,12 +70,16 @@ function request() {
   for (const id of ['length', 'trim']) if ($(id).value.trim() === '') throw new Error('Enter the stock length and end clearance.');
   const mode = document.querySelector('input[name=mode]:checked').value;
   if (mode === 'wrap' && $('cable').value === 'custom' && $('diameter').value === '') throw new Error('Enter the measured cable diameter.');
+  const fontSize = $('font-sizing').value === 'auto' ? 0 : Number($('font-size').value);
+  if ($('font-sizing').value === 'custom' && (!Number.isInteger(fontSize) || fontSize < 6 || fontSize > 160)) throw new Error('Choose a whole-number font size from 6–160 px, or Auto fit.');
   return {
     text: $('label-text').value,
     mode,
     cable: $('cable').value,
     diameter_mm: $('diameter').value === '' ? 0 : Number($('diameter').value),
     length_mm: Number($('length').value), trim_mm: Number($('trim').value), copies,
+    font: $('font').value, font_size_px: fontSize,
+    align: document.querySelector('input[name=align]:checked').value,
   };
 }
 
@@ -98,11 +102,34 @@ function draw(plan, mode) {
   $('preview-stage').classList.toggle('wrap', mode === 'wrap');
   $('label-paper').hidden = false;
   $('preview-empty').hidden = true;
-  $('preview-dimensions').textContent = `${(rows / 8).toFixed(1)} × 12 mm ink area · ${plan.font_px} px type`;
+  $('preview-dimensions').textContent = `${(rows / 8).toFixed(1)} × 12 mm · ${plan.font_px} px ${plan.auto_fit ? 'auto fit' : 'fixed'} · ${$('font').selectedOptions[0].textContent.split(' · ')[0]}`;
   $('placement-tips').replaceChildren(...plan.tips.map(tip => {
     const p = document.createElement('p'); p.textContent = tip; return p;
   }));
   $('placement-tips').hidden = false;
+  updateWrapGuide(plan);
+}
+
+function updateWrapGuide(plan) {
+  const geometry = plan?.wrap;
+  $('wrap-fit').hidden = !geometry;
+  $('wrap-strip-preview').hidden = !geometry;
+  document.querySelector('.flat-illustration > svg').toggleAttribute('hidden', Boolean(geometry));
+  const caption = geometry ? Array.from($('label-text').value).slice(0, 11).join('') : 'USB-C';
+  document.querySelectorAll('#wrap-cable-text, [data-wrap-copy]').forEach(element => { element.textContent = caption; });
+  if (!geometry) return;
+  const strip = $('wrap-strip-preview');
+  strip.width = 96;
+  strip.height = plan.rows;
+  strip.getContext('2d').drawImage($('label-preview'), 0, 0);
+  $('wrap-diameter').textContent = `${plan.diameter_mm.toFixed(1)} mm`;
+  $('wrap-circumference').textContent = `${geometry.circumference_mm.toFixed(1)} mm`;
+  $('wrap-overlap').textContent = geometry.overlap_mm >= 0 ? `${geometry.overlap_mm.toFixed(1)} mm` : `${Math.abs(geometry.overlap_mm).toFixed(1)} mm short`;
+  $('wrap-repeats').textContent = String(plan.repeats);
+  $('wrap-fit').classList.toggle('does-not-fit', !geometry.fits);
+  $('wrap-fit-message').textContent = geometry.fits
+    ? `This stock has room for a full turn and at least 2 mm overlap. ${plan.repeats} copies of your text repeat around the wrap.`
+    : `This cable needs at least ${(Math.ceil(geometry.minimum_length_mm * 10) / 10).toFixed(1)} mm of stock for a full turn plus 2 mm overlap. Use longer stock or a flag; change the stock-length setting only to match the labels you have.`;
 }
 
 async function render() {
@@ -110,6 +137,8 @@ async function render() {
   const version = ++renderVersion;
   const wrap = document.querySelector('input[name=mode]:checked').value === 'wrap';
   $('cable-fields').hidden = !wrap;
+  $('font-size-field').hidden = $('font-sizing').value !== 'custom';
+  updateWrapGuide(null);
   $('character-count').textContent = `${Array.from($('label-text').value).length} / 240`;
   $('settings-summary').textContent = `${$('length').value} mm · ${$('trim').value} mm trim`;
   preview = null;
@@ -131,7 +160,7 @@ async function render() {
     if (version !== renderVersion) return;
     preview = { plan, input };
     draw(plan, input.mode);
-    try { localStorage.setItem('labeler.settings.v1', JSON.stringify({ length: input.length_mm, trim: input.trim_mm, cable: input.cable, density: $('density').value })); } catch { /* Optional preferences only. */ }
+    try { localStorage.setItem('labeler.settings.v1', JSON.stringify({ length: input.length_mm, trim: input.trim_mm, cable: input.cable, density: $('density').value, font: input.font, fontSize: input.font_size_px, align: input.align })); } catch { /* Optional preferences only. */ }
   } catch (error) {
     if (version !== renderVersion) return;
     $('editor-error').textContent = error.message;
@@ -150,6 +179,7 @@ function scheduleRender() {
   preview = null;
   rendering = true;
   controls();
+  document.querySelectorAll('[data-wrap-example]').forEach(button => button.setAttribute('aria-pressed', 'false'));
   clearTimeout(debounce);
   debounce = setTimeout(render, 180);
 }
@@ -222,6 +252,32 @@ document.querySelectorAll('[data-example]').forEach(button => button.addEventLis
   } else document.querySelector('input[name=mode][value=large]').checked = true;
   render();
 }));
+const wrapExamples = {
+  usb: { text: 'DESK USB-C', cable: 'usb-c', diameter: '' },
+  network: { text: 'ROUTER 01', cable: 'cat6a', diameter: '' },
+  hdmi: { text: 'TV HDMI', cable: 'hdmi', diameter: '10' },
+};
+$('start-wrap').addEventListener('click', () => {
+  if (printing) return;
+  document.querySelector('input[name=mode][value=wrap]').checked = true;
+  render();
+  $('label-text').focus();
+});
+document.querySelectorAll('[data-wrap-example]').forEach(button => button.addEventListener('click', () => {
+  if (printing) return;
+  const example = wrapExamples[button.dataset.wrapExample];
+  $('label-text').value = example.text;
+  $('cable').value = example.cable;
+  $('diameter').value = example.diameter;
+  $('length').value = '30';
+  $('trim').value = '3';
+  $('font-sizing').value = 'auto';
+  document.querySelector('input[name=mode][value=wrap]').checked = true;
+  document.querySelectorAll('[data-wrap-example]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  status('Example loaded. Review the preview and fit before printing.');
+  render();
+  $('editor-title').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+}));
 window.addEventListener('beforeunload', event => { if (printing) { event.preventDefault(); event.returnValue = ''; } });
 window.addEventListener('pagehide', () => { if (!printing) transport.disconnect(); });
 
@@ -231,6 +287,9 @@ try {
   if (Number.isFinite(saved.trim) && saved.trim >= 0 && saved.trim <= 6) $('trim').value = saved.trim;
   if (Array.from($('cable').options).some(option => option.value === saved.cable)) $('cable').value = saved.cable;
   if (['0', '1', '2'].includes(saved.density)) $('density').value = saved.density;
+  if (['sans', 'sans-bold', 'mono', 'serif'].includes(saved.font)) $('font').value = saved.font;
+  if (Number.isInteger(saved.fontSize) && saved.fontSize >= 6 && saved.fontSize <= 160) { $('font-sizing').value = 'custom'; $('font-size').value = saved.fontSize; }
+  if (['left', 'center', 'right'].includes(saved.align)) document.querySelector(`input[name=align][value=${saved.align}]`).checked = true;
 } catch { /* Preferences are optional; label text is never saved. */ }
 if (!supported) {
   $('browser-notice').hidden = false;

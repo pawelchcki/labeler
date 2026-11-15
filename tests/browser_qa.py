@@ -54,6 +54,33 @@ try:
         assert page.locator('#label-preview').get_attribute('width') == '216'
         assert page.locator('#label-preview').get_attribute('height') == '96'
         assert not page.locator('#label-paper').is_hidden()
+        original = page.locator('#label-preview').evaluate("canvas => canvas.toDataURL()")
+        for font, name in [('sans-bold', 'Sans bold'), ('mono', 'Mono'), ('serif', 'Serif')]:
+            page.locator('#font').select_option(font)
+            page.wait_for_function("!document.querySelector('#download').disabled && document.querySelector('#preview-dimensions').textContent.includes(" + json.dumps(name) + ")")
+            assert page.locator('#label-preview').evaluate("canvas => canvas.toDataURL()") != original
+        page.locator('#font-sizing').select_option('custom')
+        page.wait_for_function("!document.querySelector('#font-size-field').hidden")
+        page.locator('#font-size').fill('24')
+        page.wait_for_function("!document.querySelector('#download').disabled && document.querySelector('#preview-dimensions').textContent.includes('24 px fixed')")
+        page.locator('.alignment-picker label').nth(2).click()
+        page.wait_for_function("!document.querySelector('#download').disabled && JSON.parse(localStorage.getItem('labeler.settings.v1')).align === 'right'")
+        page.reload(wait_until='domcontentloaded')
+        page.wait_for_function("document.querySelector('#print-status').textContent.includes('Make a label')")
+        assert page.locator('#font').input_value() == 'serif'
+        assert page.locator('#font-sizing').input_value() == 'custom'
+        assert page.locator('#font-size').input_value() == '24'
+        assert page.locator('input[name=align][value=right]').is_checked()
+        page.locator('[data-example="garaż 1"]').click()
+        page.locator('#font-size').fill('160')
+        page.wait_for_function("!document.querySelector('#editor-error').hidden")
+        assert 'does not fit' in page.locator('#editor-error').inner_text()
+        assert page.locator('#download').is_disabled()
+        page.locator('#font-sizing').select_option('auto')
+        page.locator('#font').select_option('sans')
+        page.locator('.alignment-picker label').nth(1).click()
+        page.wait_for_function("!document.querySelector('#download').disabled")
+        results.append('PASS: four distinct fonts, exact fixed size, overflow rejection, alignment and saved settings')
         page.screenshot(path='/tmp/labeler-desktop.png', full_page=True)
         with page.expect_download() as download:
             page.locator('#download').click()
@@ -62,6 +89,21 @@ try:
         page.wait_for_function("!document.querySelector('#download').disabled && !document.querySelector('#cable-fields').hidden")
         assert page.locator('#label-preview').get_attribute('width') == '96'
         assert page.locator('#cable').input_value() == 'usb-c'
+        for example, circumference in [('usb', '14.1 mm'), ('network', '23.6 mm'), ('hdmi', '31.4 mm')]:
+            page.locator('[data-wrap-example="' + example + '"]').click()
+            page.wait_for_function("!document.querySelector('#download').disabled && document.querySelector('#wrap-circumference').textContent === " + json.dumps(circumference))
+            assert page.locator('#wrap-strip-preview').is_visible()
+            assert page.locator('#wrap-fit').is_visible()
+            expected_caption = page.locator('#label-text').input_value()[:11]
+            assert page.locator('#wrap-cable-text').text_content() == expected_caption
+            assert page.locator('[data-wrap-copy]').nth(0).text_content() == expected_caption
+            if example == 'hdmi':
+                assert 'does-not-fit' in page.locator('#wrap-fit').get_attribute('class')
+                assert '33.5 mm' in page.locator('#wrap-fit-message').inner_text()
+            else:
+                assert 'does-not-fit' not in page.locator('#wrap-fit').get_attribute('class')
+        page.screenshot(path='/tmp/labeler-wrap-guide.png', full_page=True)
+        results.append('PASS: USB-C, Cat6a and thick-HDMI examples, live repeat raster, circumference and insufficient-stock warning')
         page.locator('#label-text').fill('😀')
         page.wait_for_function("!document.querySelector('#editor-error').hidden")
         assert page.locator('#download').is_disabled()
@@ -71,6 +113,7 @@ try:
         page.set_viewport_size({'width': 390, 'height': 844})
         page.locator('[data-example="garaż 1"]').click()
         page.wait_for_function("!document.querySelector('#download').disabled")
+        assert page.locator('#wrap-cable-text').text_content() == 'USB-C'
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
         page.screenshot(path='/tmp/labeler-mobile.png', full_page=True)
         results.append('PASS: 390px mobile layout without horizontal overflow')

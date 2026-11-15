@@ -23,6 +23,9 @@ class MainActivity : Activity() {
     private lateinit var length: EditText
     private lateinit var trim: EditText
     private lateinit var cable: Spinner
+    private lateinit var font: Spinner
+    private lateinit var fontSize: EditText
+    private lateinit var alignment: Spinner
     private lateinit var mode: RadioGroup
     private lateinit var preview: ImageView
     private lateinit var advice: TextView
@@ -36,6 +39,8 @@ class MainActivity : Activity() {
     private var uncertain = false
     private val prefs by lazy { getSharedPreferences("printer", MODE_PRIVATE) }
     private val cableIds = listOf("cat6a","cat6","cat5e","hdmi","usb","usb-c","power","custom")
+    private val fontIds = listOf("sans","sans-bold","mono","serif")
+    private val alignIds = listOf("left","center","right")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val content = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(24,40,24,32); setBackgroundColor(0xfff4f7f5.toInt()) }
@@ -46,8 +51,13 @@ class MainActivity : Activity() {
         select=Button(this).apply { this.text=prefs.getString("name","Choose printer"); setOnClickListener { discover() }; content.addView(this) }
         text=EditText(this).apply { hint="What should the label say?"; minLines=2; maxLines=5; content.addView(this) }
         mode=RadioGroup(this).apply { orientation=LinearLayout.HORIZONTAL; addView(RadioButton(this@MainActivity).apply { id=R.id.large_mode; this.text="Large label" }); addView(RadioButton(this@MainActivity).apply { id=R.id.wrap_mode; this.text="Cable wrap" }); check(R.id.large_mode); content.addView(this) }
+        caption("Font & text",14f)
+        font=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Sans · clean","Sans bold · sturdy","Mono · cable IDs","Serif · classic")); setSelection(fontIds.indexOf(prefs.getString("font","sans")).coerceAtLeast(0)); content.addView(this) }
+        fontSize=EditText(this).apply { hint="Font size (6–160 px), blank for Auto fit"; inputType=2; val size=prefs.getInt("font_size_px",0); if(size>0)setText(size.toString()); content.addView(this) }
+        alignment=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Align left","Align center","Align right")); setSelection(alignIds.indexOf(prefs.getString("align","center")).coerceAtLeast(0)); content.addView(this) }
         cable=Spinner(this).apply { adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Cat6a Ethernet · ~7.5 mm","Cat6 · ~6.2 mm","Cat5e · ~5.2 mm","HDMI · ~7 mm","USB · ~4 mm","USB-C · ~4.5 mm","Power · ~7 mm","Measured diameter")); content.addView(this) }
         diameter=EditText(this).apply { hint="Measured cable diameter (mm), optional"; inputType=8194; content.addView(this) }
+        Button(this).apply { this.text="How cable wraps work"; setOnClickListener { AlertDialog.Builder(this@MainActivity).setTitle("Wrap the long edge around the cable").setMessage("1. Print the repeated label.\n\n2. Peel it and wrap the long edge around the cable jacket. The words run along the cable.\n\n3. Press the ends together with at least 2 mm overlap. Turn the cable to find another copy.\n\nA 7.5 mm Cat6a cable needs about 25.6 mm of stock. A measured 10 mm HDMI cable needs at least 33.5 mm; use longer stock or a flag. Measure the jacket, not the connector.").setPositiveButton("Got it",null).show() }; content.addView(this) }
         val details=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; visibility=View.GONE; content.addView(this) }
         val settings=Button(this).apply { this.text="Label size & alignment"; setOnClickListener { details.visibility=if(details.visibility==View.VISIBLE) View.GONE else View.VISIBLE } }
         content.addView(settings,content.indexOfChild(details))
@@ -59,9 +69,10 @@ class MainActivity : Activity() {
         print=Button(this).apply { this.text="Print one label"; isEnabled=false; setOnClickListener { send() }; content.addView(this) }
         Button(this).apply { this.text="Use with your assistant"; setOnClickListener { AlertDialog.Builder(this@MainActivity).setTitle("Printing with Gemini").setMessage("Choose a printer and allow Nearby devices here first. Once your Google account has access to Labeler, open Gemini, type @Labeler, and ask it to print your label. If it is missing, the integration still needs to be enabled for your Google account. You can always share text to Labeler to open a preview.").setPositiveButton("Got it",null).show() }; content.addView(this) }
         val watcher=object:TextWatcher { override fun beforeTextChanged(s:CharSequence?,start:Int,count:Int,after:Int){}; override fun onTextChanged(s:CharSequence?,start:Int,before:Int,count:Int){ refresh() }; override fun afterTextChanged(s:Editable?){} }
-        listOf(text,diameter,length,trim).forEach { it.addTextChangedListener(watcher) }
+        listOf(text,diameter,length,trim,fontSize).forEach { it.addTextChangedListener(watcher) }
         mode.setOnCheckedChangeListener { _,_-> refresh() }
-        cable.onItemSelectedListener=object:AdapterView.OnItemSelectedListener { override fun onNothingSelected(p:AdapterView<*>?){}; override fun onItemSelected(p:AdapterView<*>?,v:View?,position:Int,id:Long){ refresh() } }
+        val selectionListener=object:AdapterView.OnItemSelectedListener { override fun onNothingSelected(p:AdapterView<*>?){}; override fun onItemSelected(p:AdapterView<*>?,v:View?,position:Int,id:Long){ refresh() } }
+        listOf(cable,font,alignment).forEach { it.onItemSelectedListener=selectionListener }
         accept(intent); refresh()
     }
     private fun accept(value:Intent) {
@@ -75,6 +86,8 @@ class MainActivity : Activity() {
     private fun request()=JSONObject().put("text",text.text.toString()).put("mode",if(mode.checkedRadioButtonId==R.id.wrap_mode) "wrap" else "large")
         .put("cable",cableIds[cable.selectedItemPosition.coerceAtLeast(0)]).put("diameter_mm",if(diameter.text.isBlank()) 0.0 else diameter.text.toString().toDouble())
         .put("length_mm",length.text.toString().toDouble()).put("trim_mm",trim.text.toString().toDouble())
+        .put("font",fontIds[font.selectedItemPosition.coerceAtLeast(0)]).put("font_size_px",if(fontSize.text.isBlank()) 0 else fontSize.text.toString().toInt())
+        .put("align",alignIds[alignment.selectedItemPosition.coerceAtLeast(0)])
     private fun refresh() {
         if(!::print.isInitialized)return
         val wrap=mode.checkedRadioButtonId==R.id.wrap_mode
@@ -86,6 +99,7 @@ class MainActivity : Activity() {
                 val request=request()
                 val result=withContext(Dispatchers.Default){NativeBridge.execute(request)}
                 plan=result
+                prefs.edit().putString("font",request.getString("font")).putInt("font_size_px",request.getInt("font_size_px")).putString("align",request.getString("align")).apply()
                 val bytes=result.getString("raster").bytes(); val rows=result.getInt("rows")
                 val pixels=IntArray(96*rows) { if(bytes[it/8].toInt() and (0x80 shr (it%8)) !=0) 0xff000000.toInt() else 0xffffffff.toInt() }
                 val bitmap=Bitmap.createBitmap(pixels,96,rows,Bitmap.Config.ARGB_8888)
