@@ -1,0 +1,15 @@
+.gradle/
+**/build/
+core/target/
+local.properties
+.idea/
+*.jks
+app/src/main/jniLibs/
+.signing/
+*.keystore
+dist/
+docs/validation/*.log
+web/pkg/
+web/service-worker.js
+.DS_Store
+node_modules/

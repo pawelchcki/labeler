@@ -1,0 +1,43 @@
+name: Test and deploy Labeler
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust and WebAssembly
+        run: rustup update stable --no-self-update && rustup target add wasm32-unknown-unknown
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test shared engine
+        run: cargo test --locked --manifest-path core/Cargo.toml && cargo build --locked --manifest-path core/Cargo.toml --examples
+      - name: Build browser engine
+        run: sh scripts/build-web.sh
+      - name: Test browser transport and native parity
+        run: node --test tests/*.test.mjs
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

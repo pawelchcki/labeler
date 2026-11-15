@@ -1,0 +1,9 @@
+{
+  "versionCode": 1,
+  "applicationId": "net.chcki.labeler",
+  "originalAabSha256": "045d453164d2a46c72fd995b98ade11c92c720ff7314888aef2620ea5021fec7",
+  "originalNativeLibrarySha256": "1d095a028b59d43f054e72f76224b13120e49dcad4d6990a5247edcc6ea8176a",
+  "symbolsFile": "dist/labeler-v1-native-debug-symbols.zip",
+  "symbolLevel": "SYMBOL_TABLE",
+  "nativeTextUnchangedAfterStripping": true
+}

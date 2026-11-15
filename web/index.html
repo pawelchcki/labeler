@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173e33">
+  <meta name="description" content="Make perfectly fitted labels for your Fichero or D11s printer. Large text, cable wraps, and direct Bluetooth printing. Everything stays on your device.">
+  <title>Labeler — Say it. Size it. Stick it.</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="Labeler home"><img src="./icon.svg" alt="" width="38" height="38"><span>labeler<span class="brand-dot">.</span></span></a>
+    <div class="header-right"><span class="local-badge"><span class="dot"></span> On your device</span><a class="source-link" href="https://github.com/pawelchcki/labeler" target="_blank" rel="noreferrer">Source <span aria-hidden="true">↗</span></a></div>
+  </header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">A LITTLE ORDER GOES A LONG WAY</p><h1>Say it. Size it. Stick it.</h1><p class="intro-copy">A home for every cable, box, and thing you keep.</p></div><div class="printer-type"><span class="tiny-label">MADE FOR</span><strong>Fichero / D11s</strong><span>30 × 14 mm labels · Bluetooth</span></div></div>
+    <div id="browser-notice" class="notice" role="status" hidden></div>
+    <div class="workspace">
+      <section class="editor panel" aria-labelledby="editor-title">
+        <div class="section-heading"><span class="step-number">01</span><h2 id="editor-title">Make your label</h2></div>
+        <label class="field-label" for="label-text">What should it say?<span id="character-count">0 / 240</span></label>
+        <textarea id="label-text" maxlength="480" rows="3" placeholder="e.g. garaż 1" spellcheck="false" autofocus></textarea>
+        <div class="examples" aria-label="Try an example"><span>Try</span><button type="button" data-example="garaż 1">garaż 1</button><button type="button" data-example="USB-C" data-wrap="true">USB-C</button><button type="button" data-example="Office supplies">Office supplies</button></div>
+        <fieldset class="mode-field"><legend class="field-label">Label style</legend><div class="mode-picker"><label><input type="radio" name="mode" value="large" checked><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4zM9 15l3-6 3 6M10 13h4"/></svg><strong>Large label</strong><small>One clear, bold message</small></span></label><label><input type="radio" name="mode" value="wrap"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4v20h-4M6 7h12v10H6zM9 10h6M9 14h6"/></svg><strong>Cable wrap</strong><small>Repeats around the cable</small></span></label></div></fieldset>
+        <div id="cable-fields" class="cable-fields" hidden><label class="field-label" for="cable">Cable type</label><select id="cable"><option value="cat6a">Cat6a Ethernet · ~7.5 mm</option><option value="cat6">Cat6 Ethernet · ~6.2 mm</option><option value="cat5e">Cat5e Ethernet · ~5.2 mm</option><option value="hdmi">HDMI · ~7 mm</option><option value="usb">USB · ~4 mm</option><option value="usb-c">USB-C charging · ~4.5 mm</option><option value="power">Power lead · ~7 mm</option><option value="custom">Measured diameter</option></select><label class="field-label sub-label" for="diameter">Measured diameter <span>optional · mm</span></label><input id="diameter" type="number" min="2" max="20" step="0.1" placeholder="Use cable estimate"></div>
+        <details class="settings"><summary><span>Label size &amp; alignment</span><span class="settings-summary" id="settings-summary">30 mm · 3 mm trim</span><span class="chevron" aria-hidden="true">⌄</span></summary><div class="settings-body"><div class="field-row"><div><label for="length">Stock length <span>mm</span></label><input id="length" type="number" min="15" max="60" step="0.5" value="30"></div><div><label for="trim">End clearance <span>mm</span></label><input id="trim" type="number" min="0" max="6" step="0.25" value="3"></div></div><p>Defaults match 30 × 14 mm Fichero stock. The 3 mm trim leaves room for the label gap.</p></div></details>
+        <div id="editor-error" class="field-error" role="status" hidden></div>
+      </section>
+      <section class="output" aria-label="Preview and print">
+        <div class="preview-panel panel"><div class="section-heading"><span class="step-number">02</span><h2>See it before you stick it</h2><span id="preview-badge" class="preview-badge">LIVE PREVIEW</span></div><div class="preview-stage" id="preview-stage"><div id="preview-empty" class="preview-empty"><svg viewBox="0 0 96 56" aria-hidden="true"><rect x="4" y="4" width="88" height="48" rx="5"/><path d="M29 20h38M29 28h30M29 36h22"/></svg><strong>Your next bit of order.</strong><span>Type a label to see how it will print.</span></div><div id="label-paper" class="label-paper" hidden><canvas id="label-preview" aria-label="Actual label raster preview" role="img"></canvas></div></div><div class="preview-meta"><span id="preview-dimensions">96-dot printhead · 203 DPI</span><button id="download" class="text-button" type="button" disabled>Save image <span aria-hidden="true">↓</span></button></div><div id="placement-tips" class="placement-tips" hidden></div></div>
+        <div class="print-panel panel"><div class="printer-connection"><div class="printer-identity"><span id="connection-dot" class="connection-dot"></span><div><strong id="printer-name">No printer connected</strong><span id="connection-description">Turn on your printer and keep it nearby.</span></div></div><button id="connect" class="secondary-button" type="button">Connect printer</button></div><div class="print-options"><div class="copies-control"><label for="copies">Copies</label><input id="copies" type="number" min="1" max="10" step="1" value="1"></div><label class="density-control" for="density">Ink <select id="density"><option value="0">Light</option><option value="1">Medium</option><option value="2" selected>Bold</option></select></label></div><button id="print" class="print-button" type="button" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8V3h12v5M6 17H3V8h18v9h-3M6 13h12v8H6zM16 11h2"/></svg><span id="print-label">Print one label</span><span aria-hidden="true">↗</span></button><progress id="print-progress" max="100" value="0" hidden aria-label="Label transfer progress"></progress><p id="print-status" class="print-status" role="status" aria-live="polite">Loading the label engine…</p><div id="uncertain-panel" class="uncertain-panel" hidden><strong>Check the physical label first.</strong><p>A print may have started. Check the paper before trying again.</p><button type="button" id="confirm-checked" class="secondary-button">I’ve checked the label</button></div></div>
+      </section>
+    </div>
+    <div class="footnotes"><p><span aria-hidden="true">◉</span> Your words stay here. Rendering and printing happen on your device.</p><p>Use Chrome on Android, macOS or Windows for Bluetooth printing. Keep this tab open while printing. <a href="https://developer.chrome.com/docs/capabilities/bluetooth" target="_blank" rel="noreferrer">Browser support ↗</a></p></div>
+  </main>
+  <footer><span>labeler. <span class="footer-tagline">Less searching. More finding.</span></span><a href="https://github.com/pawelchcki/labeler#readme" target="_blank" rel="noreferrer">About this project ↗</a></footer>
+  <noscript><div class="notice">Enable JavaScript to render labels and connect to your Bluetooth printer.</div></noscript>
+</body>
+</html>

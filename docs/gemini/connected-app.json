@@ -1,0 +1,20 @@
+{
+  "name": "Labeler",
+  "connectionType": "Android MCP",
+  "applicationId": "net.chcki.labeler",
+  "versionCode": 1,
+  "description": "Print automatically fitted text labels and readable cable wraps on your nearby Fichero printer, with previews and placement advice.",
+  "capabilities": [
+    "Print text labels using the largest font that fits the selected label size.",
+    "Create repeated cable-wrap labels using common cable diameter estimates or your measured diameter.",
+    "Preview label fit and get advice about cable circumference and label placement."
+  ],
+  "examplePrompts": [
+    "@Labeler print a large label saying mikuś 195m",
+    "@Labeler make a cable-wrap label saying garaż 2 for a Cat6a cable",
+    "Preview a label saying kamera wschód 2 in Labeler"
+  ],
+  "icon": "icon-512.png",
+  "privacyPolicyUrl": null,
+  "termsOfServiceUrl": null
+}
