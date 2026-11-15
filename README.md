@@ -28,12 +28,14 @@ sh scripts/build-web.sh
 cargo test --locked --manifest-path core/Cargo.toml
 cargo build --locked --manifest-path core/Cargo.toml --examples
 node --test tests/*.test.mjs
-python3 -m http.server 8080 --directory web
+python3 -m http.server 8080 --directory web/build
 ```
 
-Open `http://localhost:8080`. The generated WASM and service worker are ignored by Git and rebuilt in CI. The GitHub Actions workflow tests native/WASM output parity, exercises browser transport against the independent Rust printer emulator, and deploys `web/` to GitHub Pages after a successful push to `main`. Browser UI checks can be run with `uv run --no-project --with invisible-playwright==0.44.1 python tests/browser_qa.py web` on Linux.
+Open `http://localhost:8080`. The generated WASM, service worker and `web/build/` deployment directory are ignored by Git and rebuilt in CI. The GitHub Actions workflow tests native/WASM output parity, exercises browser transport against the independent Rust printer emulator, and deploys `web/build/` to GitHub Pages after a successful push to `main`. Browser UI checks can be run with `uv run --no-project --with invisible-playwright==0.44.1 python tests/browser_qa.py web/build` on Linux.
 
-Only the static `web/` directory is published to Pages. Android signing keys, local configuration, build output and release binaries are excluded from the repository. Existing third-party font and Gradle wrapper licenses are included alongside those assets.
+Each published release has content-versioned JavaScript, worker, font and WASM paths. Online navigation fetches the current HTML; offline navigation falls back to the last fully cached release. Precache installation bypasses the browser's older HTTP cache. The footer shows the current build and provides **Check for updates**; a ready update is loaded only when you press **Load update**, which is disabled while printing. Opening `?v=BUILD_HASH` also recovers clients still controlled by the original cache-first service worker. Settings and uncertain-job tracking are preserved.
+
+Only the generated static `web/build/` directory is published to Pages. Android signing keys, local configuration, build output and release binaries are excluded from the repository. Existing third-party font and Gradle wrapper licenses are included alongside those assets.
 
 ## Use
 

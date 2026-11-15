@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#173e33">
+  <meta name="labeler-build" content="__BUILD_HASH__">
   <meta name="description" content="Make perfectly fitted labels for your Fichero or D11s printer. Large text, cable wraps, and direct Bluetooth printing. Everything stays on your device.">
   <title>Labeler — Say it. Size it. Stick it.</title>
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
@@ -18,6 +19,7 @@
   <main>
     <div class="intro"><div><p class="eyebrow">A LITTLE ORDER GOES A LONG WAY</p><h1>Say it. Size it. Stick it.</h1><p class="intro-copy">A home for every cable, box, and thing you keep.</p></div><div class="printer-type"><span class="tiny-label">MADE FOR</span><strong>Fichero / D11s</strong><span>30 × 14 mm labels · Bluetooth</span></div></div>
     <div id="browser-notice" class="notice" role="status" hidden></div>
+    <div id="app-update" class="update-notice" role="status" hidden><span>A new version is ready. Finish your label, then load the update.</span><button id="load-update" type="button" class="secondary-button">Load update</button></div>
     <div class="workspace">
       <section class="editor panel" aria-labelledby="editor-title">
         <div class="section-heading"><span class="step-number">01</span><h2 id="editor-title">Make your label</h2></div>
@@ -52,7 +54,7 @@
     </section>
     <div class="footnotes"><p><span aria-hidden="true">◉</span> Your words stay here. Rendering and printing happen on your device.</p><p>Use Chrome on Android, macOS or Windows for Bluetooth printing. Keep this tab open while printing. <a href="https://developer.chrome.com/docs/capabilities/bluetooth" target="_blank" rel="noreferrer">Browser support ↗</a></p></div>
   </main>
-  <footer><span>labeler. <span class="footer-tagline">Less searching. More finding.</span></span><a href="https://github.com/pawelchcki/labeler#readme" target="_blank" rel="noreferrer">About this project ↗</a></footer>
+  <footer><span>labeler. <span class="footer-tagline">Less searching. More finding.</span></span><div class="version-controls"><span id="app-version">Build __BUILD_HASH__</span><button id="check-update" type="button" class="text-button">Check for updates</button><span id="update-status" role="status"></span></div><a href="https://github.com/pawelchcki/labeler#readme" target="_blank" rel="noreferrer">About this project ↗</a></footer>
   <noscript><div class="notice">Enable JavaScript to render labels and connect to your Bluetooth printer.</div></noscript>
 </body>
 </html>

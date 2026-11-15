@@ -7,7 +7,7 @@ import sys
 import threading
 from invisible_playwright import InvisiblePlaywright
 
-root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'web').resolve()
+root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else 'web/build').resolve()
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):
         pass

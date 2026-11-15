@@ -1,5 +1,6 @@
 import { D11sTransport, bytesFromHex } from './bluetooth.mjs';
 import { PrintGuard } from './jobs.mjs';
+import { setupUpdates } from './updates.mjs';
 
 const $ = id => document.getElementById(id);
 const worker = new Worker(new URL('./engine-worker.mjs', import.meta.url), { type: 'module' });
@@ -60,6 +61,8 @@ function controls() {
   $('download').disabled = !preview || rendering;
   $('uncertain-panel').hidden = !guard.pending;
   $('confirm-checked').disabled = printing;
+  $('load-update').disabled = printing;
+  $('check-update').disabled = printing;
   for (const element of document.querySelectorAll('.editor input, .editor textarea, .editor select, .examples button, .print-options input, .print-options select, [data-wrap-example], #start-wrap')) element.disabled = printing;
   if (!printing) $('print-label').textContent = Number($('copies').value) > 1 ? `Print ${$('copies').value} labels` : 'Print one label';
 }
@@ -298,4 +301,4 @@ if (!supported) {
     : 'Bluetooth printing requires HTTPS or localhost. Open the published GitHub Pages site to connect a printer.';
 }
 controls();
-if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+if (window.isSecureContext) setupUpdates({ isPrinting: () => printing, onAvailable: controls });

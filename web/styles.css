@@ -984,12 +984,18 @@ footer>a {
 .wrap-fit.does-not-fit { background:#fff6df; border-color:#ead9b1; color:#8a6233; }
 .wrap-fit.does-not-fit .wrap-fit-stats span { color:#a28966; }
 .guide-note { font-size:10px; line-height:1.8; color:#8b957f; margin:19px 0 0; }
+.update-notice { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:13px 18px; margin-bottom:20px; background:#eaf2de; border:1px solid #ccdcb9; border-radius:10px; font-size:12px; line-height:1.6; }
+.version-controls { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; font-size:9px; font-weight:400; }
+.version-controls .text-button { font-size:9px; }
 @media(max-width:800px) {
   .wrap-guide { padding:23px; }
   .wrap-steps { gap:18px; }
   .wrap-example-row { align-items:flex-start; flex-direction:column; }
 }
 @media(max-width:600px) {
+  footer { flex-wrap:wrap; gap:15px; }
+  .version-controls { order:3; flex-basis:100%; justify-content:flex-start; gap:12px; }
+  .update-notice { align-items:flex-start; font-size:11px; gap:12px; }
   .typography-controls { margin-top:22px; }
   .guide-heading { align-items:flex-start; flex-direction:column; gap:10px; }
   .guide-heading h2 { font-size:19px; line-height:1.4; }

@@ -1,5 +1,12 @@
 # Validation — 2026-11-12
 
+Cached-version upgrade fix — 2026-11-15:
+
+- Confirmed the font release was deployed successfully and present in live HTML. Reproduced the reported stale controls using the original committed web app and its cache-first service worker, with a warm HTTP cache and then a newer server deployment. A fresh-browser check had missed this upgrade path.
+- The deployment now uses content-versioned asset directories, network-first online navigation, a fully precached offline fallback, and cache-reloading precache requests. A footer build identifier, manual update check and explicit update banner make new releases visible. Updates never automatically navigate a page and cannot be loaded while printing.
+- The upgrade browser regression (`tests/upgrade_qa.py`) passed: a versioned URL recovers the new controls from the original cached app, preferences and pending-job tracking survive, an update arriving during a simulated print does not interrupt it, the explicit update works after completion, and the upgraded release renders offline.
+- Desktop/mobile, all font and wrap-example checks, simulated printing, offline reload and deployment-asset integrity checks passed against the actual `web/build/` artifact. No browser JavaScript errors occurred.
+
 Fonts and cable-wrap guide — 2026-11-15:
 
 - Added bundled Noto Sans Bold, Noto Sans Mono and Noto Serif alongside the original Noto Sans. Font provenance, revision, checksums and OFL license are in `core/assets/FONTS.md`. Both native and WASM rendering use the same font bytes.
