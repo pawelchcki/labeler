@@ -1,0 +1,20 @@
+{
+  "build": "24cded0e65dcdc91",
+  "checks": [
+    "Preview and print through browser Web Bluetooth mock",
+    "Live diagnostics and 85% battery",
+    "Gentle pacing, health check and idle wake",
+    "Diagnostic export contains identity and host metrics",
+    "Actual D11 Pro image blocked even after confirmation",
+    "CORS metadata response with no update",
+    "Desktop and 390px mobile without overflow",
+    "Offline reload includes firmware module and preserves uncertain print",
+    "Fault during raster interrupts and preserves uncertain job"
+  ],
+  "errors": [],
+  "browser": "Isolated installed Google Chrome, headless, simulated Bluetooth only",
+  "hardware_flashing_tested": false,
+  "phone_update": "Build passed; install/read-only smoke check unavailable because phone disconnected.",
+  "cors_origin": "https://pawelchcki.github.io",
+  "cors_metadata_api_allowed_origin": true
+}

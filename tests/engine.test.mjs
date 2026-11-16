@@ -31,7 +31,8 @@ test('WebAssembly produces the same layout, raster, protocol and reply results a
   }
   for (const request of [
     { op: 'presets' },
-    { op: 'reply', mode: 'status', raster: '09' },
+    { op: 'reports', raster: 'aaff04ff1001000000ff' },
+    { op: 'reply', mode: 'status', raster: '01' },
     { op: 'reply', mode: 'ack', raster: '4f4b' },
     { op: 'reply', mode: 'complete', raster: 'aa' },
   ]) assert.deepEqual(engine.dispatch(request), await native.call(request));
@@ -48,6 +49,8 @@ test('WebAssembly rejects unsupported glyphs, invalid geometry, bad acknowledgem
     { text: 'x', font: 'missing' }, { text: 'x', align: 'up' },
     { text: 'x', font_size_px: 5 }, { text: 'Does not fit', font_size_px: 160 },
     { op: 'reply', mode: 'status', raster: '04' },
+    { op: 'reply', mode: 'status', raster: '08' },
+    { op: 'reply', mode: 'complete', raster: 'aaff04' },
     { op: 'reply', mode: 'ack', raster: '4e4f' },
     { op: 'reply', mode: 'complete', raster: '00' },
   ]) {

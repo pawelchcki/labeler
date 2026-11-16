@@ -24,7 +24,7 @@ MOCK_BLUETOOTH = r"""
   const writer = { properties: { writeWithoutResponse: true }, async writeValueWithoutResponse(bytes) {
     window.testWrites.push(Array.from(bytes));
     const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-    const response = hex === '10ff40' ? [0] : (hex.startsWith('10ff10') || hex.startsWith('10ff84')) ? [79, 75] : hex === '10fffe45' && !window.loseAck ? [170] : null;
+    const response = hex === '10ff20f0' ? Array.from(new TextEncoder().encode('D11s')) : hex === '10ff20f1' ? Array.from(new TextEncoder().encode('2.4.9')) : hex === '10ff20ef' ? Array.from(new TextEncoder().encode('V1.00')) : hex === '10ff20f2' ? Array.from(new TextEncoder().encode('QA-D11S')) : hex === '10ff50f1' ? [0,85] : hex === '10ff40' ? [0] : (hex.startsWith('10ff10') || hex.startsWith('10ff84')) ? [79, 75] : hex === '10fffe45' && !window.loseAck ? [170] : null;
     if (response) {
       notify.value = new DataView(Uint8Array.from(response).buffer);
       notify.dispatchEvent(new Event('characteristicvaluechanged'));
@@ -145,6 +145,25 @@ try:
         assert page.evaluate('testWrites.every(bytes => bytes.length <= 200)')
         assert page.locator('#uncertain-panel').is_hidden()
         results.append('PASS: connect and print UI with simulated Web Bluetooth, full raster and completion acknowledgement')
+        page.locator('#diagnostics > summary').click()
+        assert 'KiB/s' in page.locator('#stat-rate').inner_text()
+        assert 'D11s' in page.locator('#device-details').inner_text()
+        assert '85%' in page.locator('#device-details').inner_text()
+        assert '200 B' in page.locator('#stat-pacing').inner_text()
+        page.locator('#gentle-pacing').check()
+        assert '100 B' in page.locator('#stat-pacing').inner_text()
+        page.locator('#check-health').click()
+        page.wait_for_function("document.querySelector('#print-status').textContent === 'Printer health checked.'")
+        with page.expect_download() as report:
+            page.locator('#export-diagnostics').click()
+        assert report.value.suggested_filename == 'labeler-diagnostics.json'
+        page.locator('.firmware-panel > summary').click()
+        assert page.locator('#flash-firmware').is_disabled()
+        page.set_viewport_size({'width':390,'height':844})
+        assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        page.screenshot(path='/tmp/labeler-diagnostics-mobile.png',full_page=True)
+        results.append('PASS: live diagnostics, device identity/battery, gentle pacing, health probe, JSON export, gated firmware controls and mobile layout')
+
         page.evaluate("sessionStorage.setItem('labeler.pending-print.v1', 'pending')")
         page.reload(wait_until='domcontentloaded')
         page.wait_for_function("!document.querySelector('#uncertain-panel').hidden")

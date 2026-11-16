@@ -30,7 +30,12 @@ MOCK = r"""
   };
   const writer = { properties: { writeWithoutResponse: true }, async writeValueWithoutResponse(bytes) {
     const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-    if(hex === '10ff40') send([0]);
+    if(hex === '10ff20f0') send(Array.from(new TextEncoder().encode('D11s')));
+    else if(hex === '10ff20f1') send(Array.from(new TextEncoder().encode('2.4.9')));
+    else if(hex === '10ff20ef') send(Array.from(new TextEncoder().encode('V1.00')));
+    else if(hex === '10ff20f2') send(Array.from(new TextEncoder().encode('QA-D11S')));
+    else if(hex === '10ff50f1') send([0,85]);
+    else if(hex === '10ff40') send([0]);
     else if(hex.startsWith('10ff10') || hex.startsWith('10ff84')) send([79,75]);
     else if(hex === '10fffe45') window.completePrint = () => send([170]);
   }};

@@ -22,10 +22,11 @@ class BleConnectionSmokeTest : Instrumentation() {
                 ?: error("Select a printer in Labeler before running this check.")
             runBlocking {
                 transport.connect(address)
+                transport.readDiagnostics()
                 transport.execute(JSONArray().put(JSONObject()
                     .put("hex", "10ff40").put("wait", "status").put("delay", 0))) {}
             }
-            result.putString("stream", "PASS: BLE connection, MTU negotiation and printer status query. No print sent.\n")
+            result.putString("stream", "PASS: BLE connection, MTU negotiation and model verification, firmware/battery diagnostics and printer status query. No print sent.\n")
             finish(Activity.RESULT_OK, result)
         } catch (e: Exception) {
             result.putString("stream", "FAIL: ${e.stackTraceToString()}\n")

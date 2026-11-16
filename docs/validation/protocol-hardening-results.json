@@ -1,0 +1,64 @@
+{
+  "scope": "Client notification handling only. Injected reports do not change emulator sensor state; this does not claim physical printer behavior under a fault.",
+  "results": [
+    {
+      "scenario": "baseline",
+      "injected_notifications": [],
+      "transport_reported_success": true,
+      "raster_transfers_started": 2,
+      "packets_after_report": 0,
+      "emulator_pages_fed": 2,
+      "completion_replies_seen_by_core": [
+        "aa",
+        "aa"
+      ],
+      "error": null
+    },
+    {
+      "scenario": "paper_fault_during_raster",
+      "injected_notifications": [
+        "ff04"
+      ],
+      "transport_reported_success": false,
+      "raster_transfers_started": 1,
+      "packets_after_report": 0,
+      "emulator_pages_fed": 0,
+      "completion_replies_seen_by_core": [],
+      "error": "Load the label roll."
+    },
+    {
+      "scenario": "discarding_during_raster",
+      "injected_notifications": [
+        "ff1001000000"
+      ],
+      "transport_reported_success": false,
+      "raster_transfers_started": 1,
+      "packets_after_report": 0,
+      "emulator_pages_fed": 0,
+      "completion_replies_seen_by_core": [],
+      "error": "Printer is discarding incoming data. Wait or reconnect before another label."
+    },
+    {
+      "scenario": "fault_after_completion_ack",
+      "injected_notifications": [
+        "ff04"
+      ],
+      "transport_reported_success": false,
+      "raster_transfers_started": 1,
+      "packets_after_report": 0,
+      "emulator_pages_fed": 1,
+      "completion_replies_seen_by_core": [],
+      "error": "Load the label roll."
+    },
+    {
+      "scenario": "low_battery_preflight",
+      "injected_notifications": [],
+      "transport_reported_success": false,
+      "raster_transfers_started": 0,
+      "packets_after_report": 0,
+      "emulator_pages_fed": 0,
+      "completion_replies_seen_by_core": [],
+      "error": "Charge the printer before printing."
+    }
+  ]
+}

@@ -12,7 +12,7 @@ from pathlib import Path
 import hashlib, json, shutil
 root = Path('web')
 files = ['index.html', 'styles.css', 'app.mjs', 'updates.mjs', 'engine.mjs', 'engine-worker.mjs', 'sw-template.js',
-         'bluetooth.mjs', 'jobs.mjs', 'icon.svg', 'pkg/labeler.wasm', 'pkg/NotoSans-Regular.ttf', 'pkg/OFL.txt', 'pkg/Noto-fonts-LICENSE.txt']
+         'bluetooth.mjs', 'firmware.mjs', 'jobs.mjs', 'icon.svg', 'pkg/labeler.wasm', 'pkg/NotoSans-Regular.ttf', 'pkg/OFL.txt', 'pkg/Noto-fonts-LICENSE.txt']
 digest = hashlib.sha256(b''.join((root / f).read_bytes() for f in files)).hexdigest()[:16]
 template = (root / 'sw-template.js').read_text()
 (root / 'service-worker.js').write_text(template.replace('__BUILD_HASH__', digest))

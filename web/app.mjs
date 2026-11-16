@@ -1,4 +1,5 @@
 import { D11sTransport, bytesFromHex } from './bluetooth.mjs';
+import { inspectFirmware, checkFirmware, downloadFirmware, flashFirmware } from './firmware.mjs';
 import { PrintGuard } from './jobs.mjs';
 import { setupUpdates } from './updates.mjs';
 
@@ -6,7 +7,9 @@ const $ = id => document.getElementById(id);
 const worker = new Worker(new URL('./engine-worker.mjs', import.meta.url), { type: 'module' });
 const calls = new Map();
 let callId = 0, ready = false, preview = null, rendering = false, printing = false, connecting = false;
-let renderVersion = 0, debounce, wakeLock;
+let renderVersion = 0, debounce, wakeLock, maintenance = false;
+let firmwareBytes = null, firmwareInspection = null, offeredFirmware = null;
+let lastHealthDraw = 0; const rateHistory = [];
 let storage;
 try { storage = sessionStorage; } catch { storage = { getItem() { return null; }, setItem() { throw new Error('Allow browser storage before printing so interrupted jobs can be tracked.'); }, removeItem() {} }; }
 const guard = new PrintGuard(storage);
@@ -42,7 +45,7 @@ worker.onmessage = ({ data }) => {
 };
 worker.onerror = () => engineFailed('The label engine could not load. Refresh this page to retry.');
 
-const transport = new D11sTransport({ onState: ({ connected, name }) => {
+const transport = new D11sTransport({ engine, onHealth: drawHealth, onState: ({ connected, name }) => {
   $('connection-dot').classList.toggle('connected', connected);
   $('printer-name').textContent = connected ? name : 'No printer connected';
   $('connection-description').textContent = connected ? 'Connected over Bluetooth. Ready for your label.' : 'Turn on your printer and keep it nearby.';
@@ -54,16 +57,20 @@ function status(message, tone = '') {
   $('print-status').className = `print-status ${tone}`;
 }
 function controls() {
-  const busy = printing || connecting;
-  $('connect').disabled = !supported || busy;
+  const busy = printing || connecting || maintenance;
+  $('connect').disabled = !supported || !ready || busy;
   $('connect').textContent = connecting ? 'Connecting…' : transport?.connected ? 'Change printer' : 'Connect printer';
+  for (const id of ['check-health', 'wake-printer', 'check-firmware']) $(id).disabled = busy || !transport?.connected;
+  $('download-firmware').disabled = busy || !offeredFirmware;
+  $('flash-firmware').disabled = busy || !transport?.connected || !firmwareInspection?.eligible || !$('confirm-firmware').checked || guard.pending;
+  for (const id of ['gentle-pacing', 'firmware-file', 'confirm-firmware']) $(id).disabled = busy;
   $('print').disabled = !supported || !ready || !preview || rendering || busy || !transport?.connected || guard.pending;
   $('download').disabled = !preview || rendering;
   $('uncertain-panel').hidden = !guard.pending;
-  $('confirm-checked').disabled = printing;
-  $('load-update').disabled = printing;
-  $('check-update').disabled = printing;
-  for (const element of document.querySelectorAll('.editor input, .editor textarea, .editor select, .examples button, .print-options input, .print-options select, [data-wrap-example], #start-wrap')) element.disabled = printing;
+  $('confirm-checked').disabled = busy;
+  $('load-update').disabled = busy;
+  $('check-update').disabled = busy;
+  for (const element of document.querySelectorAll('.editor input, .editor textarea, .editor select, .examples button, .print-options input, .print-options select, [data-wrap-example], #start-wrap')) element.disabled = printing || maintenance;
   if (!printing) $('print-label').textContent = Number($('copies').value) > 1 ? `Print ${$('copies').value} labels` : 'Print one label';
 }
 
@@ -188,20 +195,23 @@ function scheduleRender() {
 }
 
 $('connect').addEventListener('click', async () => {
-  if (connecting || printing) return;
+  if (connecting || printing || maintenance) return;
   connecting = true;
+  offeredFirmware = null; $('firmware-vendor-link').hidden = true;
+  $('confirm-firmware').checked = false;
   controls();
   status('Choose your Fichero or D11s printer in the Bluetooth dialog.');
   try {
     const name = await transport.connect();
     status(`Connected to ${name}. Ready to print.`, 'success');
+    await transport.readDiagnostics();
   } catch (error) {
     status(error.name === 'NotFoundError' ? 'No printer selected. Turn it on nearby and try Connect printer.' : error.message, 'error');
   } finally { connecting = false; controls(); }
 });
 
 $('print').addEventListener('click', async () => {
-  if (printing || !preview || guard.pending || !transport.connected || rendering) return;
+  if (printing || maintenance || !preview || guard.pending || !transport.connected || rendering) return;
   const { plan, input } = preview;
   printing = true;
   let started = false;
@@ -235,7 +245,7 @@ $('print').addEventListener('click', async () => {
 });
 
 $('confirm-checked').addEventListener('click', () => {
-  if (printing) return;
+  if (printing || maintenance) return;
   try { guard.clear(); status('Ready. A new print will make a new label.'); controls(); }
   catch { status('Could not clear the previous job. Allow browser storage and refresh.', 'error'); }
 });
@@ -261,13 +271,13 @@ const wrapExamples = {
   hdmi: { text: 'TV HDMI', cable: 'hdmi', diameter: '10' },
 };
 $('start-wrap').addEventListener('click', () => {
-  if (printing) return;
+  if (printing || maintenance) return;
   document.querySelector('input[name=mode][value=wrap]').checked = true;
   render();
   $('label-text').focus();
 });
 document.querySelectorAll('[data-wrap-example]').forEach(button => button.addEventListener('click', () => {
-  if (printing) return;
+  if (printing || maintenance) return;
   const example = wrapExamples[button.dataset.wrapExample];
   $('label-text').value = example.text;
   $('cable').value = example.cable;
@@ -281,8 +291,94 @@ document.querySelectorAll('[data-wrap-example]').forEach(button => button.addEve
   render();
   $('editor-title').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
 }));
-window.addEventListener('beforeunload', event => { if (printing) { event.preventDefault(); event.returnValue = ''; } });
-window.addEventListener('pagehide', () => { if (!printing) transport.disconnect(); });
+window.addEventListener('beforeunload', event => { if (printing || maintenance) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('pagehide', () => { if (!printing && !maintenance) transport.disconnect(); });
+
+
+function drawHealth(health) {
+  const stamp = performance.now();
+  const rate = health.bytesPerSecond / 1024;
+  const issue = health.fault || (health.discarding ? 'Printer discarding data' : '');
+  $('link-health').textContent = issue || `${health.phase} · ${rate.toFixed(1)} KiB/s · ${health.writeAvgMs.toFixed(0)} ms avg write${health.writeLastMs > 100 ? ' · Slow writes: pacing reduced' : ''}`;
+  $('link-health').classList.toggle('attention', Boolean(issue || health.lastError));
+  if (stamp - lastHealthDraw < 200 && health.phase === 'Sending label') return;
+  lastHealthDraw = stamp;
+  $('stat-rate').textContent = `${rate.toFixed(1)} KiB/s`;
+  $('stat-latency').textContent = `${health.writeAvgMs.toFixed(0)} / ${health.writeMaxMs.toFixed(0)} ms`;
+  $('stat-reply').textContent = health.replyMs === null ? '—' : `${health.replyMs.toFixed(0)} ms`;
+  $('stat-bytes').textContent = `${health.txBytes.toLocaleString()} / ${health.rxBytes.toLocaleString()} B`;
+  $('stat-packets').textContent = `${health.txPackets} / ${health.rxPackets}`;
+  $('stat-errors').textContent = `${health.timeouts} / ${health.disconnects}`;
+  $('stat-reports').textContent = `${health.faults} / ${health.discardReports}`;
+  $('stat-pacing').textContent = `${health.packetSize} B / ${health.delayMs} ms`;
+  const d = health.identity;
+  $('device-details').textContent = d.model ? `${d.model} · Firmware ${d.version || '—'} · Boot ${d.boot || '—'} · Battery ${d.battery ?? '—'}% · Serial ${d.serial || '—'}${d.status ? ` · Status 0x${d.status}` : ''}` : 'Connect a D11s printer to read its identity, firmware and battery.';
+  rateHistory.push(rate); if (rateHistory.length > 60) rateHistory.shift();
+  const max = Math.max(1, ...rateHistory);
+  $('bandwidth-line').setAttribute('d', rateHistory.map((r, i) => `${i ? 'L' : 'M'}${(i * 400 / 59).toFixed(1)} ${(60 - r / max * 52).toFixed(1)}`).join(' '));
+  $('protocol-log').textContent = transport.log.slice(-24).map(event => `${event.at.slice(11, 23)} ${event.kind} ${event.command || event.message || (event.kind === 'write' || event.kind === 'reply' ? `${event.bytes} B / ${event.ms} ms` : event.kind === 'discard' ? `active=${event.active} payload=${event.payload}` : '')}`).join('\n') || 'No protocol events yet.';
+}
+async function printerTool(action) {
+  if (printing || connecting || maintenance) return;
+  maintenance = true; controls();
+  try { await action(); }
+  catch (error) { status(error.message, 'error'); }
+  finally { maintenance = false; controls(); }
+}
+$('check-health').addEventListener('click', () => printerTool(async () => {
+  const health = await transport.readDiagnostics(); status(health.fault || 'Printer health checked.', health.fault ? 'error' : 'success');
+}));
+$('wake-printer').addEventListener('click', () => printerTool(async () => {
+  await transport.wake(); status('Wake bytes sent and printer checked. A powered-off printer must be turned on manually.');
+}));
+$('gentle-pacing').addEventListener('change', () => { try { transport.setPacing($('gentle-pacing').checked); } catch (error) { status(error.message, 'error'); } });
+$('export-diagnostics').addEventListener('click', () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(transport.exportDiagnostics(), null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = 'labeler-diagnostics.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+async function selectFirmware(bytes, name) {
+  firmwareBytes = null; firmwareInspection = null; $('confirm-firmware').checked = false;
+  const inspection = await inspectFirmware(bytes);
+  firmwareBytes = bytes; firmwareInspection = inspection;
+  $('firmware-info').textContent = `${name} · ${inspection.bytes.toLocaleString()} bytes · Model: ${inspection.model} · SHA-256: ${inspection.sha256} · ${inspection.eligible ? 'Passed file screening. Verify source and hardware match before flashing.' : 'Blocked: only a recognized raw D11s image may be flashed.'}`;
+}
+$('firmware-file').addEventListener('change', () => printerTool(async () => {
+  firmwareBytes = null; firmwareInspection = null; $('confirm-firmware').checked = false;
+  const file = $('firmware-file').files[0]; if (!file) return;
+  if (file.size > 256 * 1024) { $('firmware-info').textContent = 'Blocked: raw firmware must be at most 256 KiB.'; return; }
+  try { await selectFirmware(new Uint8Array(await file.arrayBuffer()), file.name); }
+  catch (error) { $('firmware-info').textContent = error.message; throw error; }
+}));
+$('confirm-firmware').addEventListener('change', controls);
+$('check-firmware').addEventListener('click', () => printerTool(async () => {
+  offeredFirmware = null; firmwareBytes = null; firmwareInspection = null;
+  $('confirm-firmware').checked = false; $('firmware-file').value = ''; $('firmware-vendor-link').hidden = true;
+  await transport.readDiagnostics();
+  try {
+    offeredFirmware = await checkFirmware(transport.identity, transport.device?.name);
+    $('firmware-info').textContent = offeredFirmware ? `Vendor offers version ${offeredFirmware.version}. Download and inspect the image before flashing.` : 'The vendor returned no update for this device. No firmware was downloaded.';
+    if (offeredFirmware) { $('firmware-vendor-link').href = offeredFirmware.url; $('firmware-vendor-link').hidden = false; }
+  } catch (error) { $('firmware-info').textContent = `Could not read vendor metadata: ${error.message} The server may block CORS. You can select a file downloaded separately.`; }
+}));
+$('download-firmware').addEventListener('click', () => printerTool(async () => {
+  try { await selectFirmware(await downloadFirmware(offeredFirmware.url), `Vendor ${offeredFirmware.version}`); }
+  catch (error) { $('firmware-info').textContent = `Download or inspection failed: ${error.message} If CORS is blocked, open the vendor download and select the extracted .bin locally.`; }
+}));
+$('flash-firmware').addEventListener('click', () => printerTool(async () => {
+  if (guard.pending || !firmwareBytes || !$('confirm-firmware').checked) return;
+  $('firmware-progress').hidden = false; $('firmware-progress').value = 0;
+  status('Updating firmware. Keep USB power connected and this tab open.');
+  try {
+    if (navigator.wakeLock) try { wakeLock = await navigator.wakeLock.request('screen'); } catch { /* Keep the tab visible if screen wake lock is unavailable. */ }
+    await flashFirmware(transport, firmwareBytes, { confirmed: true, onProgress(sent, total) { $('firmware-progress').value = Math.round(sent / total * 100); } });
+    $('firmware-info').textContent = 'Firmware bytes verified by the bootloader; restart sent. Reconnect and check the reported version before printing.';
+    status('Update transfer verified. Reconnect and check firmware version.', 'success');
+  } catch (error) { $('firmware-info').textContent = error.message; throw error; }
+  finally {
+    await wakeLock?.release().catch(() => {}); wakeLock = null;
+    $('firmware-progress').hidden = true; $('confirm-firmware').checked = false;
+  }
+}));
 
 try {
   const saved = JSON.parse(localStorage.getItem('labeler.settings.v1') || '{}');
@@ -301,4 +397,4 @@ if (!supported) {
     : 'Bluetooth printing requires HTTPS or localhost. Open the published GitHub Pages site to connect a printer.';
 }
 controls();
-if (window.isSecureContext) setupUpdates({ isPrinting: () => printing, onAvailable: controls });
+if (window.isSecureContext) setupUpdates({ isPrinting: () => printing || maintenance, onAvailable: controls });

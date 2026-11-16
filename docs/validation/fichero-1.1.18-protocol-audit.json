@@ -1,0 +1,178 @@
+{
+  "package": "com.lj.fichero",
+  "version_name": "1.1.18",
+  "version_code": 166,
+  "source": "User phone, installer com.android.vending (Google Play)",
+  "files": [
+    {
+      "file": "base.apk",
+      "bytes": 59353070,
+      "sha256": "980bc262af9e644458d3c6914541a0edc4ee5394997f429f68c51977f39c18ca",
+      "signature_verified": true,
+      "signer_sha256": "7c1d8063ebef5184d6fcd58ec291902bf0eab063fa5736ba4767604d98fd5148"
+    },
+    {
+      "file": "split_config.arm64_v8a.apk",
+      "bytes": 71861905,
+      "sha256": "30a346cbf5f7431db47894e8b7d331bd7c7f767cedc7065cd4110741839b7145",
+      "signature_verified": true,
+      "signer_sha256": "7c1d8063ebef5184d6fcd58ec291902bf0eab063fa5736ba4767604d98fd5148"
+    },
+    {
+      "file": "split_config.xxhdpi.apk",
+      "bytes": 348643,
+      "sha256": "7f58a6bb41b594fdab1446ec5f244a5d2ec38b5670550c46fb33194298effdf2",
+      "signature_verified": true,
+      "signer_sha256": "7c1d8063ebef5184d6fcd58ec291902bf0eab063fa5736ba4767604d98fd5148"
+    }
+  ],
+  "jadx": {
+    "version": "1.5.6",
+    "release": "https://github.com/skylot/jadx/releases/tag/v1.5.6",
+    "archive_sha256": "545ea2be9c242511bc145755cf4bda2485ade42966e096f8b4d3da2a230e8974",
+    "class_count": 15703,
+    "reported_decompilation_errors": 251,
+    "notes": "Critical reviewed D11s/AiYin/default raster and notification methods have no JADX method-error markers. AiYin error mapping also checked in fallback DEX instruction output."
+  },
+  "labeler_revision": "1f3984561b52cac98463b819024f0c4757972fb7",
+  "probe": {
+    "scope": "Client notification handling only. Injected reports do not change emulator sensor state; this does not claim physical printer behavior under a fault.",
+    "results": [
+      {
+        "scenario": "baseline",
+        "injected_notifications": [],
+        "transport_reported_success": true,
+        "raster_transfers_started": 2,
+        "packets_after_report": 0,
+        "emulator_pages_fed": 2,
+        "completion_replies_seen_by_core": [
+          "aa",
+          "aa"
+        ],
+        "error": null
+      },
+      {
+        "scenario": "paper_fault_during_raster",
+        "injected_notifications": [
+          "ff04"
+        ],
+        "transport_reported_success": true,
+        "raster_transfers_started": 2,
+        "packets_after_report": 34,
+        "emulator_pages_fed": 2,
+        "completion_replies_seen_by_core": [
+          "aa",
+          "aa"
+        ],
+        "error": null
+      },
+      {
+        "scenario": "discarding_during_raster",
+        "injected_notifications": [
+          "ff1001000000"
+        ],
+        "transport_reported_success": true,
+        "raster_transfers_started": 2,
+        "packets_after_report": 34,
+        "emulator_pages_fed": 2,
+        "completion_replies_seen_by_core": [
+          "aa",
+          "aa"
+        ],
+        "error": null
+      },
+      {
+        "scenario": "fault_after_completion_ack",
+        "injected_notifications": [
+          "ff04"
+        ],
+        "transport_reported_success": true,
+        "raster_transfers_started": 2,
+        "packets_after_report": 20,
+        "emulator_pages_fed": 2,
+        "completion_replies_seen_by_core": [
+          "aaff04",
+          "aa"
+        ],
+        "error": null
+      },
+      {
+        "scenario": "low_battery_preflight",
+        "injected_notifications": [],
+        "transport_reported_success": true,
+        "raster_transfers_started": 2,
+        "packets_after_report": 0,
+        "emulator_pages_fed": 2,
+        "completion_replies_seen_by_core": [
+          "aa",
+          "aa"
+        ],
+        "error": null
+      }
+    ]
+  },
+  "audit_date": "2026-11-16",
+  "runtime_printing_changed": false,
+  "evidence_sources": [
+    {
+      "file": "com/luckprinter/sdk_new/device/aiyin/D11s.java",
+      "sha256": "27fef13caf5171d358a93f9fc0f5c0ca262a67161fce0911846ce394fd1d4942"
+    },
+    {
+      "file": "com/luckprinter/sdk_new/device/aiyin/AiYinNormalDevice.java",
+      "sha256": "fd48e0d78249a4bd57f22fafd61ec1c741954e45b505b0a413dc8f0f0078eec7"
+    },
+    {
+      "file": "com/luckprinter/sdk_new/device/aiyin/AiYinUploadErrorCode.java",
+      "sha256": "b3c413156627e1e4d33777fa18afa995608800dab21672c463d401536f7c322c"
+    },
+    {
+      "file": "com/luckprinter/sdk_new/device/normal/base/BaseNormalDevice.java",
+      "sha256": "86cc340f20dd0ca5c71096c3c52ae5c6a4385eb8a0e7906b7b18cec84511931c"
+    },
+    {
+      "file": "com/luckprinter/sdk_new/device/normal/base/PrinterImageProcessor.java",
+      "sha256": "ec87bf1bd1bdce833188fb9c9eebdfb657d6c8307a16edf2feb04f4159bf9453"
+    },
+    {
+      "file": "com/luckprinter/sdk_new/device/PrinterHelper.java",
+      "sha256": "7a56891381eaef4f228367f333a1d4d28929f10aaa447536e957b29e427ebe16"
+    },
+    {
+      "file": "com/luckprinter/sdk_new/device/PrinterEnum.java",
+      "sha256": "eea6e309e94b5ccf0ccce2da5d7d511719829a8abfb26ed350acb84d6d42278d"
+    },
+    {
+      "file": "F/c.java",
+      "sha256": "5b575261526c2e2eb42149fdeb50406e07cfd8658bca1d650dbdfe408e81b29f"
+    },
+    {
+      "file": "T3/a.java",
+      "sha256": "bfdd9a03fc8862f072e3bc0a619a006298c634df02e3a3152d6ee639e96e5917"
+    },
+    {
+      "file": "T3/c.java",
+      "sha256": "a24c673abda0e3e3a6b379ea65ddff9fbc53688de3ffe4a1621219f1bdcd3c09"
+    },
+    {
+      "file": "T3/d.java",
+      "sha256": "83afe70475f976e6cf3e2a371fbb1f4a37bf01eb47b3f649181460e32f0a3768"
+    },
+    {
+      "file": "T3/e.java",
+      "sha256": "17ffe1b8e6619fd7fd6ced895eb9d759a8a064f1a3c7c45471b893e5d9e7f237"
+    },
+    {
+      "file": "T3/f.java",
+      "sha256": "5a4f5fa5da8218b1e7cb7b0ab6168b74cad76dad26081ccfa6292a4773fa056a"
+    },
+    {
+      "file": "T3/g.java",
+      "sha256": "9a032db541b1fb8780a2ac94914bf3dd0ff6ea84efe6d44d5345a49a960ab5c0"
+    },
+    {
+      "file": "V3/c.java",
+      "sha256": "2ddf77b2bbf5e5eaee26178a4b5477c254940465be7e7437ac8f4c5f98ed80ed"
+    }
+  ]
+}

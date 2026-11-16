@@ -33,6 +33,14 @@ async function fixture(t, settings = {}) {
     removeEventListener(type) { notices.delete(type); },
     async startNotifications() {},
   };
+  const emit = hex => {
+    for (const byte of bytesFromHex(hex)) {
+      const backing = Uint8Array.from([0xcc, 0xcc, byte, 0xcc]);
+      notifier.value = new DataView(backing.buffer, 2, 1);
+      notices.get('characteristicvaluechanged')?.({ target: notifier });
+    }
+  };
+  let injected = false;
   const writer = {
     properties: { writeWithoutResponse: true },
     async writeValueWithoutResponse(bytes) {
@@ -42,31 +50,35 @@ async function fixture(t, settings = {}) {
         device.gatt.disconnect();
         throw new Error('Simulated link loss during raster');
       }
+      if (settings.stallRaster && bytes[0] === 0x1d && bytes[1] === 0x76) return new Promise(() => {});
+      if (settings.slowRaster && !injected && bytes[0] === 0x1d && bytes[1] === 0x76) await new Promise(resolve => setTimeout(resolve, 110));
       const reply = await emulator.call({ feed: toHex(bytes) });
       assert.equal(reply.ok, true, reply.error);
-      // Deliver split replies before the write promise resolves, using offset DataViews.
-      for (const response of reply.value.replies) for (const byte of bytesFromHex(response)) {
-        const backing = Uint8Array.from([0xcc, 0xcc, byte, 0xcc]);
-        notifier.value = new DataView(backing.buffer, 2, 1);
-        notices.get('characteristicvaluechanged')?.({ target: notifier });
+      for (const response of reply.value.replies) emit(toHex(bytes) === '10ff20f0' && settings.model ? toHex(new TextEncoder().encode(settings.model)) : response);
+      if (!injected && bytes[0] === 0x1d && bytes[1] === 0x76) {
+        injected = true;
+        if (settings.rasterReport) emit(settings.rasterReport);
       }
+      if (toHex(bytes) === '10fffe45' && settings.completionReport) emit(settings.completionReport);
     },
   };
   let chooserCalled = false;
   const transport = new D11sTransport({
+    engine: request => engine.dispatch(request),
     bluetooth: { requestDevice(options) {
       chooserCalled = true;
       assert.ok(options.optionalServices.includes(SERVICE_UUID));
-      assert.ok(options.filters.some(filter => filter.namePrefix === 'FICHERO'));
+      assert.ok(options.filters.some(filter => filter.namePrefix === 'FICHERO_5836'));
       return Promise.resolve(device);
     } },
-    timing: { chunk: 0, fragments: 1, reply: 80, complete: 40, poll: 0, busy: 200 },
+    timing: { chunk: 0, fragments: 1, reply: 80, complete: 40, poll: 0, busy: 200, write: settings.stallRaster ? 10 : 5000 },
   });
   const connecting = transport.connect();
   assert.equal(chooserCalled, true, 'The chooser must run synchronously within the user gesture');
+  if (settings.model && settings.model !== 'D11s') { await assert.rejects(connecting, /Unsupported printer model/); return { transport, emulator, writes, emit }; }
   await connecting;
   t.after(() => transport.disconnect());
-  return { transport, emulator, writes };
+  return { transport, emulator, writes, emit };
 }
 
 function protocol(request, density = 2) {
@@ -148,4 +160,76 @@ test('Concurrent print requests are rejected', async t => {
 test('An unavailable persistence store blocks raster transmission', () => {
   const guard = new PrintGuard({ getItem() { return null; }, setItem() { throw new Error('Storage denied'); } });
   assert.throws(() => guard.start(), /Storage denied/);
+});
+
+for (const report of ['ff01', 'ff02', 'ff04', 'ff08', 'ff1001000000']) {
+  test(`Split asynchronous report ${report} stops the current raster and later copies`, async t => {
+    const { transport, writes } = await fixture(t, { rasterReport: report });
+    let starts = 0;
+    await assert.rejects(transport.execute(protocol({ text: 'x', copies: 2 }).steps, request => engine.dispatch(request), { onStarted() { starts++; } }));
+    assert.equal(starts, 1);
+    assert.equal(writes.filter(b => b[0] === 0x1d && b[1] === 0x76).length, 1);
+    assert.equal(transport.health().faults + transport.health().discardReports, 1);
+    assert.equal(writes.some(b => toHex(b) === '1d0c'), false, 'Do not send positioning after a reported fault');
+  });
+}
+
+test('Completion immediately followed by a fault cannot hide the fault or start copy two', async t => {
+  const { transport } = await fixture(t, { completionReport: 'ff04' });
+  let starts = 0;
+  await assert.rejects(transport.execute(protocol({ text: 'x', copies: 2 }).steps, request => engine.dispatch(request), { onStarted() { starts++; } }), /label roll/);
+  assert.equal(starts, 1);
+});
+
+test('Low battery blocks raster transmission', async t => {
+  const { transport, writes } = await fixture(t, { fault: 8 });
+  await assert.rejects(transport.execute(protocol({ text: 'x' }).steps), /Charge/);
+  assert.equal(writes.some(b => b[0] === 0x1d), false);
+});
+
+test('Model is verified over the wire rather than trusted from the Bluetooth name', async t => {
+  const { transport, writes } = await fixture(t, { model: 'D12' });
+  assert.equal(transport.connected, false);
+  assert.equal(transport.verified, false);
+  assert.equal(writes.length, 1);
+});
+
+test('Idle reports are retained and a zero discard report clears the latch', async t => {
+  const { transport, emit } = await fixture(t);
+  emit('ff1001000000'); await transport.incoming;
+  assert.equal(transport.discarding, true);
+  await assert.rejects(transport.execute(protocol({ text: 'x' }).steps), /discarding/);
+  emit('ff1000000000'); emit('ff00'); await transport.incoming;
+  assert.equal(transport.discarding, false);
+  await transport.execute(protocol({ text: 'x' }).steps);
+});
+
+test('A stalled write fails once, never retries, and records the timeout', async t => {
+  const { transport, writes } = await fixture(t, { stallRaster: true });
+  await assert.rejects(transport.execute(protocol({ text: 'x', copies: 2 }).steps), /stalled/);
+  assert.equal(transport.health().timeouts, 1);
+  assert.equal(writes.filter(b => b[0] === 0x1d && b[1] === 0x76).length, 1);
+});
+
+test('Slow writes reduce pacing; diagnostics report host bytes and never log label data', async t => {
+  const { transport } = await fixture(t, { slowRaster: true });
+  await transport.execute(protocol({ text: 'SECRET LABEL' }).steps);
+  const health = transport.health();
+  assert.ok(health.writeMaxMs >= 100);
+  assert.ok(health.delayMs >= 10);
+  assert.ok(health.bytesPerSecond > 0);
+  assert.ok(health.txPackets > 10 && health.rxPackets > 0);
+  assert.equal(JSON.stringify(transport.exportDiagnostics()).includes('SECRET LABEL'), false);
+  assert.equal(transport.log.some(event => event.command?.startsWith('1d7630')), false);
+  await transport.readDiagnostics();
+  assert.equal(transport.identity.battery, 85);
+  assert.equal(transport.identity.model, 'D11s');
+});
+
+test('Health probes and pacing changes cannot interleave with a print', async t => {
+  const { transport } = await fixture(t);
+  const print = transport.execute(protocol({ text: 'x' }).steps);
+  await assert.rejects(transport.readDiagnostics(), /idle/);
+  assert.throws(() => transport.setPacing(true), /idle/);
+  await print;
 });

@@ -1,6 +1,6 @@
 const CACHE = 'labeler-__BUILD_HASH__';
 const BUILD = '__BUILD_HASH__';
-const FILES = ['./', './index.html', './styles.css', './app.mjs', './updates.mjs', './engine.mjs', './engine-worker.mjs', './bluetooth.mjs', './jobs.mjs', './icon.svg', './pkg/labeler.wasm', './pkg/NotoSans-Regular.ttf', './pkg/OFL.txt', './pkg/Noto-fonts-LICENSE.txt'];
+const FILES = ['./', './index.html', './styles.css', './app.mjs', './updates.mjs', './engine.mjs', './engine-worker.mjs', './bluetooth.mjs', './firmware.mjs', './jobs.mjs', './icon.svg', './pkg/labeler.wasm', './pkg/NotoSans-Regular.ttf', './pkg/OFL.txt', './pkg/Noto-fonts-LICENSE.txt'];
 self.addEventListener('install', event => {
   // Activate a fully cached update so the next navigation gets the new app.
   // Existing pages keep their already-loaded JS and WASM; never reload mid-print.

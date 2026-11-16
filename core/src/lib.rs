@@ -155,13 +155,38 @@ pub fn parse_reply(data:&[u8], phase:&str)->Result<Value,String> {
             if status&2!=0 {return Err("Close the printer cover.".into());}
             if status&4!=0 {return Err("Load the label roll.".into());}
             if status&0x50!=0 {return Err("Let the printhead cool down.".into());}
+            if status&8!=0 {return Err("Charge the printer before printing.".into());}
             Ok(json!({"ok":true,"busy":status&1!=0,"low_battery":status&8!=0}))
         },
         "ack" if data==b"OK" => Ok(json!({"ok":true})),
-        "complete" if data.first()==Some(&0xaa) || data.starts_with(b"OK") => Ok(json!({"ok":true})),
+        "complete" if data==[0xaa] || data==b"OK" => Ok(json!({"ok":true})),
         "ack" => Err("Printer did not acknowledge its settings.".into()),
         _ => Err("Completion is uncertain. Check the label before retrying.".into())
     }
+}
+// Strip asynchronous reports before validating command replies. Keep an
+// incomplete report across GATT notifications; packet boundaries are not frames.
+fn reports(data:&[u8])->Result<Value,String> {
+    if data.len()>4096 { return Err("Printer reply exceeds the receive limit. Reconnect.".into()); }
+    let mut reply=vec![];let mut events=vec![];let mut i=0;
+    while i<data.len() {
+        if data[i]!=0xff {reply.push(data[i]);i+=1;continue;}
+        if i+1==data.len(){break;}
+        if data[i+1]==0x10 {
+            if data.len()-i<6 {break;}
+            let payload=&data[i+2..i+6];
+            events.push(json!({"kind":"discard","active":payload.iter().any(|b|*b!=0),"payload":hex::encode(payload)}));i+=6;
+        } else {
+            let code=data[i+1];let mut faults=vec![];
+            if code&1!=0 {faults.push("Let the printhead cool down.");}
+            if code&2!=0 {faults.push("Close the printer cover.");}
+            if code&4!=0 {faults.push("Load the label roll.");}
+            if code&8!=0 {faults.push("Charge the printer before printing.");}
+            if code&0xf0!=0 {faults.push("Unknown printer fault. Reconnect and check the printer.");}
+            events.push(json!({"kind":"fault","code":code,"message":faults.join(" ")}));i+=2;
+        }
+    }
+    Ok(json!({"ok":true,"reply":hex::encode(reply),"pending":hex::encode(&data[i..]),"events":events}))
 }
 fn pack_pixels(gray:&[u8])->Vec<u8>{
     let mut packed=vec![0u8;gray.len().div_ceil(8)];
@@ -176,7 +201,7 @@ fn pack_grayscale(r:&Request)->Result<Value,String>{
 }
 pub fn dispatch(input:&str)->String {
     let result=serde_json::from_str::<Request>(input).map_err(|e|e.to_string()).and_then(|r|match r.op.as_str(){
-        "pack"=>pack_grayscale(&r),"plan"=>plan(&r),"protocol"=>protocol(&r),"reply"=>hex::decode(&r.raster).map_err(|_|"Invalid reply".into()).and_then(|b|parse_reply(&b,&r.mode)),"presets"=>Ok(json!({"ok":true,"cables":cables()})),_=>Err("Unknown operation".into())});
+        "pack"=>pack_grayscale(&r),"plan"=>plan(&r),"protocol"=>protocol(&r),"reports"=>hex::decode(&r.raster).map_err(|_|"Invalid report".into()).and_then(|b|reports(&b)),"reply"=>hex::decode(&r.raster).map_err(|_|"Invalid reply".into()).and_then(|b|parse_reply(&b,&r.mode)),"presets"=>Ok(json!({"ok":true,"cables":cables()})),_=>Err("Unknown operation".into())});
     match result {Ok(v)=>v.to_string(),Err(e)=>json!({"ok":false,"error":e}).to_string()}
 }
 // Small, dependency-free JSON ABI shared with the browser. Each allocation has
@@ -214,6 +239,17 @@ pub extern "system" fn Java_net_chcki_labeler_NativeBridge_call(mut env:jni::JNI
 #[cfg(test)] mod tests {
  use super::*;
  #[test] fn replies_validate_errors_and_busy(){assert_eq!(parse_reply(&[1],"status").unwrap()["busy"],true);assert!(parse_reply(&[4],"status").unwrap_err().contains("roll"));assert!(parse_reply(b"OK","status").is_err());assert!(parse_reply(&[0xaa],"complete").is_ok());assert!(parse_reply(b"NO","ack").is_err());}
+ #[test] fn strict_replies_and_report_streams(){
+    assert!(parse_reply(&[8],"status").is_err());
+    for bytes in [vec![0xaa,0xff,4],b"OKgarbage".to_vec()] {assert!(parse_reply(&bytes,"complete").is_err());}
+    let r=reports(&[0xaa,0xff,4,0xff,0x10,1,0,0,0,0xff]).unwrap();
+    assert_eq!(r["reply"],"aa");assert_eq!(r["pending"],"ff");
+    assert_eq!(r["events"][0]["code"],4);assert_eq!(r["events"][1]["active"],true);
+    let r=reports(&[0xff,0x10,0,0,0,0,0xff,0]).unwrap();
+    assert_eq!(r["events"][0]["active"],false);assert_eq!(r["events"][1]["message"],"");
+    for n in 1..6 {let r=reports(&[0xff,0x10,1,0,0,0][..n]).unwrap();assert!(r["events"].as_array().unwrap().is_empty());}
+ }
+
  #[test] fn polish_is_not_clipped(){for text in ["mikuś 195m","garaż 1","kotłownia 2"] {let r=Request{text:text.into(),..Default::default()}; let p=plan(&r).unwrap();let bytes=hex::decode(p["raster"].as_str().unwrap()).unwrap();assert_eq!(bytes.len(),216*12);assert!(bytes.iter().any(|&b|b!=0)); assert!(bytes[..6*12].iter().all(|&b|b==0));assert!(bytes[210*12..].iter().all(|&b|b==0));}}
  #[test] fn wrap_geometry_and_overlap_tip(){let p=plan(&Request{text:"kamera wschód 2".into(),mode:"wrap".into(),diameter_mm:10.,..Default::default()}).unwrap();assert!(p["repeats"].as_u64().unwrap()>=2);assert!(p["tips"].to_string().contains("overlap"));}
  #[test] fn invalid_and_emoji_are_rejected(){for text in ["","😀"]{assert!(plan(&Request{text:text.into(),..Default::default()}).is_err());}assert!(plan(&Request{text:"x".into(),diameter_mm:f64::NAN,mode:"wrap".into(),..Default::default()}).is_err());}

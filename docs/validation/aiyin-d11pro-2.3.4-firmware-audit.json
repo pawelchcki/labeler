@@ -1,0 +1,120 @@
+{
+  "examined_at_utc": "2026-11-16T00:46:52.170678+00:00",
+  "scope": "Static inspection of an official D11 Pro comparison image, not a Fichero D11s firmware dump. No hardware update, bootloader entry or command testing performed.",
+  "source_article": "https://help.aiyin.com/support/solutions/articles/73000639530-d11-pro%E5%9B%BA%E4%BB%B6%E5%8C%85%E4%B8%8B%E8%BD%BD",
+  "download_endpoint": "https://help.aiyin.com/helpdesk/attachments/73121179351",
+  "files": [
+    {
+      "name": "NN0000007_D11Pro_V2.3.4_Aiyin_20240617.zip",
+      "bytes": 61405,
+      "sha256": "2bf15ad088670c4d7d3974f846929ee10a5551bc93bc2f20004e84ba2bde38e5"
+    },
+    {
+      "name": "NN0000007_D11Pro_V2.3.4_Aiyin_20240617.bin",
+      "bytes": 107032,
+      "sha256": "ddbeaec796e9813f3c322ed5f0fe492be37f358300a09b1798d3fcaccab9cbb1"
+    }
+  ],
+  "fichero_api": {
+    "endpoint": "https://api.fichero.luckjingle.com/api/apis/public/firmware",
+    "result": "HTTP success response with no firmware data/media/download URL for tested D11s selectors, the bundled catalog UUID, an unfiltered request, and one related FICHERO_6181/A40 selector. This does not establish that no firmware exists or that exact device identifiers/authentication cannot change the result.",
+    "actual_printer_serial_submitted": false,
+    "response": {
+      "msg": "success",
+      "code": 200,
+      "message": "success",
+      "status": 200
+    },
+    "phone_cache": "No /sdcard/Android/data/com.lj.fichero/files/firmware directory present at inspection."
+  },
+  "format": {
+    "architecture": "ARM Thumb, little-endian",
+    "assumed_load_address": "0x01020000",
+    "load_address_evidence": "APK UpdatePrinterESC default start address and internal code pointers such as 0x0102e26d at file offset 0x100 agree.",
+    "disassembler": "Capstone 5.0.9",
+    "compression": "The downloaded ZIP contains one raw .bin with directly decodable code; no unpacking/decryption needed for reviewed functions.",
+    "vendor_signature_verified": false
+  },
+  "findings": [
+    {
+      "finding": "Model/version identity",
+      "evidence": [
+        {
+          "file_offset": "0xc044",
+          "bytes_hex": "56312e30300000004431312050726f00322e332e34000000",
+          "decoded": "V1.00; D11 Pro; 2.3.4"
+        }
+      ],
+      "applicability": "Confirms sample identity, not D11s compatibility."
+    },
+    {
+      "finding": "10 FF command dispatch",
+      "addresses": [
+        "0x0102e98e",
+        "0x0102717c",
+        "0x010272be",
+        "0x0102a588"
+      ],
+      "details": "Main interpreter consumes 10, tests FF, dispatches on third byte. FE selects handler consuming 01 or 45. 01 sets job state; 45 updates deferred completion state. No per-raster-packet acknowledgement was established.",
+      "applicability": "Consistent with audited AiYin print sequence, not evidence of an additional mandatory handshake."
+    },
+    {
+      "finding": "Unsolicited FF nn fault/status change report",
+      "addresses": [
+        "0x01028784",
+        "0x0102879a",
+        "0x010287ae",
+        "0x010287c2",
+        "0x01024134"
+      ],
+      "template_offset": "0x14c90",
+      "template_hex": "ff000000",
+      "details": "Loads FF 00 template; substitutes byte 1 with a state byte when changed; sends length 2 through selected transport independently of query handling. Sensor meanings are from the APK audit, not independently proven by naming this firmware routine.",
+      "applicability": "Supports keeping an always-active event decoder. Exact D11s implementation still requires its image or hardware traces."
+    },
+    {
+      "finding": "Bounded shared receive ring with high-water handling",
+      "addresses": [
+        "0x010231b8",
+        "0x0102fda8",
+        "0x0102fe58",
+        "0x0102ff44",
+        "0x0102c8c8"
+      ],
+      "details": "Ring storage at RAM 0x00025374, indices modulo 0x6000 (24576). Blocking producer waits at occupancy 0x5fff. Another producer has high-water handling above 0x4ccc, calls 0x0102fab8, and returns 2 at 0x5fc0. Consumer clears a congestion latch below 0x3999 and calls 0x0102faa4.",
+      "applicability": "Explains need for bounded streaming/backpressure; internal thresholds are not a verified BLE credit format or safe D11s burst size."
+    },
+    {
+      "finding": "Bounded wait for command parameter bytes",
+      "addresses": [
+        "0x0102fb88"
+      ],
+      "details": "Receive-byte helper waits in 2-tick steps with retry counter >0x12c returning -1. Tick duration not established.",
+      "applicability": "Long pauses inside commands may exceed parser wait bounds; not a measured D11s timeout."
+    },
+    {
+      "finding": "Diagnostic challenge/reply command",
+      "addresses": [
+        "0x010272c4",
+        "0x0102c260"
+      ],
+      "command": "10 FF FF nn",
+      "response_expression": "(((nn >> 4) | (nn & 15)) << 4) | ((nn >> 4) & (nn & 15))",
+      "details": "Consumes one byte, computes OR and AND of its nibbles, sends one byte. APK updater uses this command, but it is not in the normal D11s print initialization path.",
+      "applicability": "Comparison-image static result; not tested on printer and not required by this audit."
+    },
+    {
+      "finding": "Identity response handler",
+      "addresses": [
+        "0x0102bfcc"
+      ],
+      "details": "10 FF 20 dispatches to identity responses containing V1.00, D11 Pro and 2.3.4."
+    }
+  ],
+  "limitations": [
+    "Linear disassembly includes data and compiler switch tables that can appear as instructions. Findings use manually traced entry points, branches and literal loads; this is not a complete recovered source tree.",
+    "No D11s firmware image obtained. No claim of binary compatibility, exhaustive command coverage or root cause of the earlier physical disconnect.",
+    "FF 10 discarding-data payload semantics remain unresolved.",
+    "No runtime Labeler changes or publication made. Firmware and disassembly stay outside the repository."
+  ]
+}

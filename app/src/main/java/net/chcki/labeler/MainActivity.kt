@@ -30,6 +30,8 @@ class MainActivity : Activity() {
     private lateinit var preview: ImageView
     private lateinit var advice: TextView
     private lateinit var status: TextView
+    private lateinit var health: TextView
+    private var latestDiagnostics = JSONObject()
     private lateinit var print: Button
     private lateinit var select: Button
     private var debounce: Job? = null
@@ -48,6 +50,12 @@ class MainActivity : Activity() {
         fun caption(value:String,size:Float=16f) = TextView(this).apply { this.text=value; textSize=size; setPadding(0,12,0,12); content.addView(this) }
         caption("Labeler",30f); caption("Say it. Size it. Stick it.")
         status=caption("Choose a printer once. Everything stays on your phone.")
+        health=caption("Connection health appears while printing.",12f)
+        Button(this).apply { this.text="Diagnostics / copy JSON";setOnClickListener {
+            val clipboard=getSystemService(android.content.ClipboardManager::class.java)
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Labeler diagnostics",latestDiagnostics.toString(2)))
+            AlertDialog.Builder(this@MainActivity).setTitle("Printer diagnostics").setMessage(latestDiagnostics.toString(2)).setPositiveButton("Copied",null).show()
+        };content.addView(this) }
         select=Button(this).apply { this.text=prefs.getString("name","Choose printer"); setOnClickListener { discover() }; content.addView(this) }
         text=EditText(this).apply { hint="What should the label say?"; minLines=2; maxLines=5; content.addView(this) }
         mode=RadioGroup(this).apply { orientation=LinearLayout.HORIZONTAL; addView(RadioButton(this@MainActivity).apply { id=R.id.large_mode; this.text="Large label" }); addView(RadioButton(this@MainActivity).apply { id=R.id.wrap_mode; this.text="Cable wrap" }); check(R.id.large_mode); content.addView(this) }
@@ -118,7 +126,11 @@ class MainActivity : Activity() {
         printing=true; print.isEnabled=false; status.text="Connecting and printing…"
         prefs.edit().putFloat("length",request.getDouble("length_mm").toFloat()).putFloat("trim",request.getDouble("trim_mm").toFloat()).apply()
         scope.launch {
-            try { PrintController.print(this@MainActivity,request,UUID.randomUUID().toString()); status.text="Printed. Ready for the next label." }
+            try { PrintController.print(this@MainActivity,request,UUID.randomUUID().toString()) { report -> runOnUiThread {
+                    latestDiagnostics=report
+                    val rate=report.optDouble("bytes_per_second")/1024
+                    health.text="%.1f KiB/s · %d B packets · %.0f ms avg / %d ms peak write · %d faults".format(rate,report.optInt("packet_size"),report.optDouble("write_avg_ms"),report.optLong("write_max_ms"),report.optInt("faults"))
+                } }; status.text="Printed. Ready for the next label." }
             catch(e:Exception){ status.text=e.message; if(e.message?.contains("may have started")==true){uncertain=true; AlertDialog.Builder(this@MainActivity).setTitle("Check the printed label").setMessage("The connection ended after printing may have started. Check the paper before printing again.").setPositiveButton("I've checked") {_,_->uncertain=false;refresh()}.show()} }
             finally {printing=false;refresh()}
         }
@@ -133,7 +145,7 @@ class MainActivity : Activity() {
         val scanner=adapter.bluetoothLeScanner ?: run { status.text="Bluetooth scanner is unavailable. Turn Bluetooth off and on.";return }
         status.text="Looking for Fichero / D11s printers…"; select.isEnabled=false
         val devices=linkedMapOf<String,BluetoothDevice>()
-        val cb=object:ScanCallback(){ override fun onScanResult(type:Int,result:ScanResult){val name=result.scanRecord?.deviceName ?: result.device.name ?: "";if(name.startsWith("FICHERO",true)||name.startsWith("D11s",true))devices[result.device.address]=result.device}
+        val cb=object:ScanCallback(){ override fun onScanResult(type:Int,result:ScanResult){val name=result.scanRecord?.deviceName ?: result.device.name ?: "";if(name.startsWith("FICHERO_5836",true)||name.startsWith("D11s",true)||name.startsWith("MULLER_6473",true))devices[result.device.address]=result.device}
             override fun onScanFailed(errorCode:Int){status.text="Bluetooth scan failed ($errorCode). Try again."} }
         activeScan=cb; scanner.startScan(cb)
         scope.launch {delay(8000); scanner.stopScan(cb);activeScan=null;select.isEnabled=true

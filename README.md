@@ -16,7 +16,18 @@ Direct printing uses [Web Bluetooth](https://developer.chrome.com/docs/capabilit
 
 Your label text and raster stay on your device. GitHub Pages serves the static app; no label content is uploaded. After the first successful load, the service worker caches the app and WebAssembly engine for offline use. Settings are saved locally; label text is not saved. An interrupted print remains marked as uncertain in that tab until you confirm you have checked the physical label. The page never resumes or automatically retries an interrupted job.
 
-The browser transport sends at most 200 bytes per BLE write with 20 ms pacing, following the tested upstream driver. Browsers manage MTU negotiation; unlike Android, Web Bluetooth does not expose an MTU or connection-priority API.
+The browser transport sends at most 200 bytes per BLE write with at least 20 ms pacing, following the tested upstream driver. Slow host writes only increase this spacing; Gentle transfer uses 100-byte packets and at least 40 ms spacing. Browsers manage MTU negotiation; unlike Android, Web Bluetooth does not expose an MTU or connection-priority API.
+
+**Printer diagnostics** shows model, firmware/boot versions, serial, battery, status, transfer throughput, write latency, reply time, byte/packet counts and fault/discard/timeout counters. The recent trend and protocol event log stay in memory. Export JSON for troubleshooting; exports include device identifiers but exclude label text and raster data. Host write timings are not printer acknowledgements, measured radio bandwidth, RSSI or printer buffer occupancy. Health checks and wake bytes run only while idle and cannot power on a fully switched-off printer.
+
+Connections verify the model over the wire before printing. Shared Rust framing separates asynchronous `FF nn` sensor events and `FF 10` discard reports from command replies, including fragmented or combined notifications. Faults stop further writes/copies; completion validation is exact, and low battery blocks a print. Interrupted jobs are never automatically retried.
+
+**Firmware tools** checks the original vendor API using the connected device's name, model, serial and version. This explicit action sends those identifiers to Fichero; labels remain local. The API allowed the GitHub Pages origin in the 2026-11-16 CORS check, but firmware-file hosting may have different rules. If CORS blocks downloading, open the vendor link and select the extracted raw `.bin` locally. No D11s update was returned by the audit's generic queries; firmware availability is not guaranteed.
+
+Flashing is **experimental and not validated on physical hardware**. Only screened raw D11s images (1–256 KiB, matching model marker and code pointers) are offered; D11 Pro files are blocked. Screening and SHA-256 do not verify authenticity or board compatibility. The user must confirm an exact hardware match, USB power and the risk of an unusable printer. The flow checks a fresh idle status and at least 50% battery, validates bootloader frames/challenge, transfers 256-byte blocks with replies, compares the printer's final additive checksum, then sends restart. It never retries erase/data packets and disconnects after an attempted update, requiring fresh identity verification. No firmware image is bundled or automatically flashed.
+
+Android shares the same report decoder, fault/low-battery gates and model check. Its print screen shows host throughput and write timing; Diagnostics copies session metrics and the recent command/event log. Firmware tools currently live on the website.
+
 
 ### Build and test the website
 
